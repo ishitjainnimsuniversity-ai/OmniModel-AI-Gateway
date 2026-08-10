@@ -14,6 +14,12 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from core.config import GatewayConfig
 from core.providers import PROVIDERS_METADATA
 from core.adapters import UniversalAdapter
@@ -117,19 +123,22 @@ class OmniAI:
         except Exception:
             return asyncio.run(_run_async())
 
-class AlfaAI(OmniAI):
-    """ALFA AI 5.0 Frontier Multi-Model Intelligence Engine"""
+class GenesisAI(OmniAI):
+    """GENESIS AI 5.0 Universal Cognitive Multi-Model Engine"""
+    pass
+
+class AlfaAI(GenesisAI):
     pass
 
 # Quick CLI test
 if __name__ == "__main__":
-    alfa = AlfaAI()
+    genesis = GenesisAI()
     print("=======================================================")
-    print("ALFA AI 5.0 Frontier Neural Bridge initialized!")
+    print("GENESIS AI 5.0 Universal Cognitive Bridge initialized!")
     print(f"Total Providers: {len(PROVIDERS_METADATA)}")
-    print(f"Total Models Cataloged: {len(alfa.list_models())}")
+    print(f"Total Models Cataloged: {len(genesis.list_models())}")
     print("=======================================================")
-    test_prompt = "Say hello from ALFA AI 5.0 in one sentence!"
-    print(f"\nTesting ALFA AI 5.0 Smart Router with prompt: '{test_prompt}'\n")
-    res = alfa.chat(test_prompt, profile="free_tier")
+    test_prompt = "Say hello from GENESIS AI 5.0 in one sentence!"
+    print(f"\nTesting GENESIS AI 5.0 Smart Router with prompt: '{test_prompt}'\n")
+    res = genesis.chat(test_prompt, profile="free_tier")
     print(res)

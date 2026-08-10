@@ -91,15 +91,16 @@ async def serve_dashboard():
 @app.get("/v1/models")
 async def list_openai_models():
     model_list = []
-    # ALFA AI 5.0 Flagship Models
-    model_list.append({"id": "alfa-ai-5.0", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 (Frontier Auto-Router)"})
-    model_list.append({"id": "alfa-5.0-reasoning", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 Deep Reasoning (DeepSeek R1 / o3 / Gemini Thinking)"})
-    model_list.append({"id": "alfa-5.0-speed", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 Ultra-Speed (<100ms Groq / Cerebras)"})
-    model_list.append({"id": "alfa-5.0-coder", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 Elite Coder (Claude 3.7 / Codestral / Gemini Pro)"})
-    model_list.append({"id": "alfa-5.0-free", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 100% Free Tier (Zero-Cost Models)"})
-    model_list.append({"id": "alfa-5.0-search", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 Live Web Search (Perplexity / Grounded)"})
-    model_list.append({"id": "auto", "object": "model", "owned_by": "alfa-ai"})
-    model_list.append({"id": "free_tier", "object": "model", "owned_by": "alfa-ai"})
+    # GENESIS AI 5.0 Flagship Models
+    model_list.append({"id": "genesis-ai-5.0", "object": "model", "owned_by": "genesis-ai", "name": "GENESIS AI 5.0 (Frontier Cognitive Auto-Router)"})
+    model_list.append({"id": "genesis-5.0-reasoning", "object": "model", "owned_by": "genesis-ai", "name": "GENESIS AI 5.0 Deep Reasoning (DeepSeek R1 / o3 / Gemini Thinking)"})
+    model_list.append({"id": "genesis-5.0-speed", "object": "model", "owned_by": "genesis-ai", "name": "GENESIS AI 5.0 Ultra-Speed (<100ms Groq / Cerebras)"})
+    model_list.append({"id": "genesis-5.0-coder", "object": "model", "owned_by": "genesis-ai", "name": "GENESIS AI 5.0 Elite Coder (Claude 3.7 / Codestral / Gemini Pro)"})
+    model_list.append({"id": "genesis-5.0-free", "object": "model", "owned_by": "genesis-ai", "name": "GENESIS AI 5.0 100% Free Tier (Zero-Cost Models)"})
+    model_list.append({"id": "genesis-5.0-search", "object": "model", "owned_by": "genesis-ai", "name": "GENESIS AI 5.0 Live Web Search (Perplexity / Grounded)"})
+    model_list.append({"id": "genesis-5.0", "object": "model", "owned_by": "genesis-ai"})
+    model_list.append({"id": "auto", "object": "model", "owned_by": "genesis-ai"})
+    model_list.append({"id": "free_tier", "object": "model", "owned_by": "genesis-ai"})
 
     for pid, meta in PROVIDERS_METADATA.items():
         for m in meta.get("models", []):
@@ -122,9 +123,27 @@ async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
     raw_messages = [{"role": m.role, "content": m.content} for m in req.messages]
     prompt_snippet = raw_messages[-1]["content"] if raw_messages else ""
 
-    # Check if this is a virtual router model (auto, free_tier, reasoning, speed, coding, search)
-    if req_model in ["auto", "free_tier", "reasoning", "speed", "coding", "search"] or req_model.startswith("profile:"):
-        profile = req_model.replace("profile:", "") if req_model.startswith("profile:") else (req_model if req_model != "auto" else None)
+    # Check if this is a virtual router model (genesis-ai-5.0, auto, free_tier, reasoning, speed, coding, search)
+    genesis_profiles = {
+        "genesis-ai-5.0": None,
+        "genesis-5.0": None,
+        "genesis-5.0-reasoning": "reasoning",
+        "genesis-5.0-speed": "speed",
+        "genesis-5.0-coder": "coding",
+        "genesis-5.0-free": "free_tier",
+        "genesis-5.0-search": "search",
+        "alfa-ai-5.0": None,
+        "alfa-5.0": None,
+        "auto": None,
+        "free_tier": "free_tier",
+        "reasoning": "reasoning",
+        "speed": "speed",
+        "coding": "coding",
+        "search": "search"
+    }
+
+    if req_model in genesis_profiles or req_model.startswith("profile:"):
+        profile = genesis_profiles.get(req_model) if req_model in genesis_profiles else req_model.replace("profile:", "")
         
         if req.stream:
             async def event_generator():

@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="logo.png" alt="ALFA AI 5.0 Logo" width="170" style="border-radius: 20px; box-shadow: 0 0 35px rgba(0,240,255,0.4);" />
+<img src="logo.png" alt="GENESIS AI 5.0 Logo" width="170" style="border-radius: 20px; box-shadow: 0 0 35px rgba(0,240,255,0.4);" />
 
-# ⚡ ALFA AI 5.0
-### Frontier Multi-Model Intelligence & Autonomous Gateway — 2026 Edition
+# 🌌 GENESIS AI 5.0
+### Universal Cognitive Gateway & Frontier Intelligence Hub — 2026 Edition
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/ishitjainnimsuniversity-ai/OmniModel-AI-Gateway)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com)
-[![OpenAI Compatible](https://img.shields.io/badge/API-ALFA%20AI%205.0%20Proxy-brightgreen.svg)](http://127.0.0.1:8000/v1)
+[![OpenAI Compatible](https://img.shields.io/badge/API-GENESIS%20AI%205.0%20Proxy-brightgreen.svg)](http://127.0.0.1:8000/v1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-*ALFA AI 5.0 is an autonomous, frontier multi-model intelligence gateway, real-time 4-way model arena, and OpenAI drop-in proxy integrating 20+ top AI providers with 100% free-tier zero-cost auto-routing.*
+*GENESIS AI 5.0 is an autonomous, frontier multi-model cognitive intelligence gateway, real-time 4-way model arena, and OpenAI drop-in proxy integrating 20+ top AI providers with 100% free-tier zero-cost auto-routing.*
 
 </div>
 
