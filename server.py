@@ -91,13 +91,15 @@ async def serve_dashboard():
 @app.get("/v1/models")
 async def list_openai_models():
     model_list = []
-    # Add smart routing virtual models
-    model_list.append({"id": "auto", "object": "model", "owned_by": "omnimodel-router"})
-    model_list.append({"id": "free_tier", "object": "model", "owned_by": "omnimodel-router"})
-    model_list.append({"id": "speed", "object": "model", "owned_by": "omnimodel-router"})
-    model_list.append({"id": "reasoning", "object": "model", "owned_by": "omnimodel-router"})
-    model_list.append({"id": "coding", "object": "model", "owned_by": "omnimodel-router"})
-    model_list.append({"id": "search", "object": "model", "owned_by": "omnimodel-router"})
+    # ALFA AI 5.0 Flagship Models
+    model_list.append({"id": "alfa-ai-5.0", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 (Frontier Auto-Router)"})
+    model_list.append({"id": "alfa-5.0-reasoning", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 Deep Reasoning (DeepSeek R1 / o3 / Gemini Thinking)"})
+    model_list.append({"id": "alfa-5.0-speed", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 Ultra-Speed (<100ms Groq / Cerebras)"})
+    model_list.append({"id": "alfa-5.0-coder", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 Elite Coder (Claude 3.7 / Codestral / Gemini Pro)"})
+    model_list.append({"id": "alfa-5.0-free", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 100% Free Tier (Zero-Cost Models)"})
+    model_list.append({"id": "alfa-5.0-search", "object": "model", "owned_by": "alfa-ai", "name": "ALFA AI 5.0 Live Web Search (Perplexity / Grounded)"})
+    model_list.append({"id": "auto", "object": "model", "owned_by": "alfa-ai"})
+    model_list.append({"id": "free_tier", "object": "model", "owned_by": "alfa-ai"})
 
     for pid, meta in PROVIDERS_METADATA.items():
         for m in meta.get("models", []):

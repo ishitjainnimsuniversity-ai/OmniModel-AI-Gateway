@@ -117,15 +117,19 @@ class OmniAI:
         except Exception:
             return asyncio.run(_run_async())
 
+class AlfaAI(OmniAI):
+    """ALFA AI 5.0 Frontier Multi-Model Intelligence Engine"""
+    pass
+
 # Quick CLI test
 if __name__ == "__main__":
-    ai = OmniAI()
+    alfa = AlfaAI()
     print("=======================================================")
-    print("OmniModel AI Bridge initialized!")
+    print("ALFA AI 5.0 Frontier Neural Bridge initialized!")
     print(f"Total Providers: {len(PROVIDERS_METADATA)}")
-    print(f"Total Models Cataloged: {len(ai.list_models())}")
+    print(f"Total Models Cataloged: {len(alfa.list_models())}")
     print("=======================================================")
-    test_prompt = "Say hello from OmniModel AI Gateway in one sentence!"
-    print(f"\nTesting Smart Router with prompt: '{test_prompt}'\n")
-    res = ai.chat(test_prompt, profile="free_tier")
+    test_prompt = "Say hello from ALFA AI 5.0 in one sentence!"
+    print(f"\nTesting ALFA AI 5.0 Smart Router with prompt: '{test_prompt}'\n")
+    res = alfa.chat(test_prompt, profile="free_tier")
     print(res)
