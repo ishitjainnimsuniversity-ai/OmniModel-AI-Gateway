@@ -1,0 +1,4 @@
+ALFA AI 5.0 Live Public URL:
+https://807898c633c44d.lhr.life
+
+Local: http://127.0.0.1:8000
