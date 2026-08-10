@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniModel Gateway // Universal AI Hub & Router</title>
+    <meta name="description" content="Unified Multi-Model Gateway connecting 20+ AI Providers with Smart Auto-Routing, Free Tier Hub, and Model Arena.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome / Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Marked & Highlight.js for code rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-background">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Top Navigation Bar -->
+        <header class="top-nav">
+            <div class="nav-brand">
+                <img src="/static/logo.png" alt="OmniModel Logo" class="brand-logo-img">
+                <div class="brand-text">
+                    <span class="brand-title">OMNIMODEL <span class="brand-pill">GATEWAY</span></span>
+                    <span class="brand-subtitle">Antigravity AI Agent Integration Hub • 2026</span>
+                </div>
+            </div>
+
+            <nav class="nav-tabs">
+                <button class="tab-btn active" data-tab="chat">
+                    <i class="fa-solid fa-bolt-lightning"></i> Smart Router
+                </button>
+                <button class="tab-btn" data-tab="arena">
+                    <i class="fa-solid fa-hand-fist"></i> Model Arena
+                </button>
+                <button class="tab-btn" data-tab="providers">
+                    <i class="fa-solid fa-network-wired"></i> Providers & Keys
+                </button>
+                <button class="tab-btn" data-tab="freehub">
+                    <i class="fa-solid fa-gift"></i> Free AI Hub
+                </button>
+                <button class="tab-btn" data-tab="analytics">
+                    <i class="fa-solid fa-chart-line"></i> User Analytics
+                </button>
+                <button class="tab-btn" data-tab="proxy">
+                    <i class="fa-solid fa-terminal"></i> Antigravity & SDK
+                </button>
+            </nav>
+
+            <div class="nav-status">
+                <div class="status-indicator">
+                    <span class="status-dot pulsing"></span>
+                    <span class="status-text" id="active-providers-count">Scanning Providers...</span>
+                </div>
+                <div class="gateway-badge">
+                    <i class="fa-solid fa-server"></i> :8000/v1
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- TAB 1: SMART ROUTER & CHAT -->
+            <section id="tab-chat" class="tab-pane active">
+                <div class="chat-layout">
+                    <!-- Left Control Sidebar -->
+                    <aside class="chat-sidebar glass-panel">
+                        <div class="sidebar-header">
+                            <h3><i class="fa-solid fa-sliders"></i> Routing Strategy</h3>
+                        </div>
+
+                        <div class="control-group">
+                            <label><i class="fa-solid fa-compass"></i> Auto Intent Mode</label>
+                            <div class="profile-grid" id="profile-selector">
+                                <button class="profile-chip active" data-profile="auto">
+                                    <span class="chip-title">🤖 Auto Intent</span>
+                                    <span class="chip-sub">Analyzes prompt complexity</span>
+                                </button>
+                                <button class="profile-chip" data-profile="free_tier">
+                                    <span class="chip-title">🆓 100% Free Tier</span>
+                                    <span class="chip-sub">Zero cost / open models</span>
+                                </button>
+                                <button class="profile-chip" data-profile="speed">
+                                    <span class="chip-title">⚡ Ultra-Speed</span>
+                                    <span class="chip-sub">Groq / Cerebras &lt;150ms</span>
+                                </button>
+                                <button class="profile-chip" data-profile="reasoning">
+                                    <span class="chip-title">🧠 Deep Reasoning</span>
+                                    <span class="chip-sub">DeepSeek R1 / Gemini Thinking</span>
+                                </button>
+                                <button class="profile-chip" data-profile="coding">
+                                    <span class="chip-title">💻 Elite Code</span>
+                                    <span class="chip-sub">Claude 3.7 / Gemini Pro / Codestral</span>
+                                </button>
+                                <button class="profile-chip" data-profile="search">
+                                    <span class="chip-title">🌐 Live Web Search</span>
+                                    <span class="chip-sub">Perplexity Sonar / Citations</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label><i class="fa-solid fa-microchip"></i> Manual Model Override</label>
+                            <select id="direct-model-select" class="custom-select">
+                                <option value="auto">⚡ Auto-Select via Smart Router</option>
+                                <optgroup label="🆓 100% Free / Open Tier" id="optgroup-free"></optgroup>
+                                <optgroup label="🚀 Frontier & Reasoning" id="optgroup-frontier"></optgroup>
+                                <optgroup label="⚡ Ultra-Fast Inference" id="optgroup-fast"></optgroup>
+                                <optgroup label="💻 Coding Specialists" id="optgroup-code"></optgroup>
+                                <optgroup label="🌐 Search & Retrieval" id="optgroup-search"></optgroup>
+                                <optgroup label="🖥️ Local Offline (Ollama)" id="optgroup-local"></optgroup>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="slider-header">
+                                <label><i class="fa-solid fa-temperature-half"></i> Temperature</label>
+                                <span id="temp-val">0.7</span>
+                            </div>
+                            <input type="range" id="temp-slider" min="0" max="1.5" step="0.05" value="0.7" class="custom-range">
+                        </div>
+
+                        <div class="sidebar-footer">
+                            <button id="clear-chat-btn" class="secondary-btn">
+                                <i class="fa-solid fa-trash-can"></i> Clear History
+                            </button>
+                        </div>
+                    </aside>
+
+                    <!-- Right Chat Stream Window -->
+                    <div class="chat-main glass-panel">
+                        <!-- Routing Banner Info -->
+                        <div id="routing-banner" class="routing-banner hidden">
+                            <div class="routing-banner-content">
+                                <i class="fa-solid fa-route banner-icon"></i>
+                                <div class="banner-details">
+                                    <div class="banner-title" id="route-banner-title">Smart Router Activated</div>
+                                    <div class="banner-desc" id="route-banner-desc">Analyzing prompt intent and selecting optimal fallback chain...</div>
+                                </div>
+                            </div>
+                            <div class="banner-tags" id="route-banner-tags"></div>
+                        </div>
+
+                        <!-- Chat Messages Container -->
+                        <div id="chat-messages" class="chat-messages-container">
+                            <div class="welcome-card">
+                                <div class="welcome-icon">
+                                    <i class="fa-solid fa-atom"></i>
+                                </div>
+                                <h2>OmniModel Gateway Online</h2>
+                                <p>Integrated with <strong>20 top AI model providers</strong> from the 2026 Master Reference. Enjoy automatic smart routing, resilient multi-provider waterfall fallbacks, and 100% free-tier access.</p>
+                                
+                                <div class="quick-prompts-grid">
+                                    <button class="quick-prompt" data-prompt="Explain quantum computing principles with a concrete Python simulation code.">
+                                        <i class="fa-solid fa-code"></i> Quantum Code Simulation
+                                    </button>
+                                    <button class="quick-prompt" data-prompt="Solve this step by step: How many r's are in strawberry, and prove it with algorithmic reasoning.">
+                                        <i class="fa-solid fa-brain"></i> Deep Reasoning & Logic
+                                    </button>
+                                    <button class="quick-prompt" data-prompt="Summarize the core architectural innovations of Transformer models in 3 ultra-fast bullet points.">
+                                        <i class="fa-solid fa-bolt"></i> Ultra-Fast Summary (Groq/Cerebras)
+                                    </button>
+                                    <button class="quick-prompt" data-prompt="What are the latest breakthroughs in agentic AI in 2026?">
+                                        <i class="fa-solid fa-globe"></i> Web Grounded Retrieval
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Input Box -->
+                        <div class="chat-input-wrapper">
+                            <div class="input-container">
+                                <textarea id="chat-input" placeholder="Type a message or prompt... (Shift+Enter for new line)" rows="1"></textarea>
+                                <button id="send-btn" class="send-btn" title="Send Message">
+                                    <i class="fa-solid fa-arrow-up"></i>
+                                </button>
+                            </div>
+                            <div class="input-meta">
+                                <span class="meta-item"><i class="fa-solid fa-shield-halved"></i> Active Fallback Waterfall: Enabled</span>
+                                <span class="meta-item" id="active-route-display"><i class="fa-solid fa-wand-magic-sparkles"></i> Mode: Auto Intent</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: MODEL ARENA (MULTI-DUEL) -->
+            <section id="tab-arena" class="tab-pane">
+                <div class="arena-layout">
+                    <div class="arena-topbar glass-panel">
+                        <div class="arena-header">
+                            <h2><i class="fa-solid fa-swords"></i> Multi-Model Parallel Arena</h2>
+                            <p>Broadcast a prompt to up to 4 models simultaneously to compare real-time generation speed, response quality, and latency.</p>
+                        </div>
+                        <div class="arena-selectors-grid">
+                            <div class="arena-selector-card">
+                                <span class="badge badge-a">Model A</span>
+                                <select id="arena-model-0" class="arena-select">
+                                    <option value="gemini/gemini-2.0-flash">Google Gemini 2.0 Flash (Free Tier)</option>
+                                    <option value="groq/llama-3.3-70b-versatile">Groq Llama 3.3 70B (500+ tok/s)</option>
+                                    <option value="openrouter/deepseek/deepseek-r1:free">OpenRouter DeepSeek R1 (100% Free)</option>
+                                    <option value="anthropic/claude-3-7-sonnet-20250219">Anthropic Claude 3.7 Sonnet</option>
+                                </select>
+                            </div>
+                            <div class="arena-selector-card">
+                                <span class="badge badge-b">Model B</span>
+                                <select id="arena-model-1" class="arena-select">
+                                    <option value="groq/llama-3.3-70b-versatile" selected>Groq Llama 3.3 70B (500+ tok/s)</option>
+                                    <option value="gemini/gemini-2.0-flash-thinking-exp-01-21">Gemini 2.0 Flash Thinking</option>
+                                    <option value="openrouter/meta-llama/llama-3.3-70b-instruct:free">OpenRouter Llama 3.3 70B (Free)</option>
+                                    <option value="openai/o3-mini">OpenAI o3-mini Reasoning</option>
+                                </select>
+                            </div>
+                            <div class="arena-selector-card">
+                                <span class="badge badge-c">Model C</span>
+                                <select id="arena-model-2" class="arena-select">
+                                    <option value="openrouter/deepseek/deepseek-r1:free" selected>OpenRouter DeepSeek R1 (Free)</option>
+                                    <option value="cerebras/llama3.1-70b">Cerebras Llama 3.1 70B</option>
+                                    <option value="mistral/codestral-latest">Mistral Codestral</option>
+                                    <option value="openai/gpt-4o">OpenAI GPT-4o</option>
+                                </select>
+                            </div>
+                            <div class="arena-selector-card">
+                                <span class="badge badge-d">Model D</span>
+                                <select id="arena-model-3" class="arena-select">
+                                    <option value="sambanova/Meta-Llama-3.3-70B-Instruct" selected>SambaNova Llama 3.3 70B</option>
+                                    <option value="cohere/command-r-plus-08-2024">Cohere Command R+</option>
+                                    <option value="perplexity/sonar">Perplexity Sonar Web Search</option>
+                                    <option value="ollama/llama3.2:latest">Local Ollama Llama 3.2</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Arena Input -->
+                    <div class="arena-input-bar glass-panel">
+                        <input type="text" id="arena-prompt-input" placeholder="Enter prompt to battle across all 4 models simultaneously..." />
+                        <button id="arena-broadcast-btn" class="primary-btn">
+                            <i class="fa-solid fa-play"></i> Launch Duel
+                        </button>
+                    </div>
+
+                    <!-- Arena Results 4-Way Grid -->
+                    <div class="arena-grid">
+                        <div class="arena-panel glass-panel" id="arena-card-0">
+                            <div class="panel-header">
+                                <span class="panel-tag badge-a">Model A</span>
+                                <span class="panel-model-name" id="arena-name-0">Gemini 2.0 Flash</span>
+                                <div class="panel-metrics" id="arena-metric-0">Ready</div>
+                            </div>
+                            <div class="panel-body" id="arena-body-0">
+                                <div class="arena-placeholder">Awaiting prompt broadcast...</div>
+                            </div>
+                        </div>
+
+                        <div class="arena-panel glass-panel" id="arena-card-1">
+                            <div class="panel-header">
+                                <span class="panel-tag badge-b">Model B</span>
+                                <span class="panel-model-name" id="arena-name-1">Groq Llama 3.3 70B</span>
+                                <div class="panel-metrics" id="arena-metric-1">Ready</div>
+                            </div>
+                            <div class="panel-body" id="arena-body-1">
+                                <div class="arena-placeholder">Awaiting prompt broadcast...</div>
+                            </div>
+                        </div>
+
+                        <div class="arena-panel glass-panel" id="arena-card-2">
+                            <div class="panel-header">
+                                <span class="panel-tag badge-c">Model C</span>
+                                <span class="panel-model-name" id="arena-name-2">DeepSeek R1 (Free)</span>
+                                <div class="panel-metrics" id="arena-metric-2">Ready</div>
+                            </div>
+                            <div class="panel-body" id="arena-body-2">
+                                <div class="arena-placeholder">Awaiting prompt broadcast...</div>
+                            </div>
+                        </div>
+
+                        <div class="arena-panel glass-panel" id="arena-card-3">
+                            <div class="panel-header">
+                                <span class="panel-tag badge-d">Model D</span>
+                                <span class="panel-model-name" id="arena-name-3">SambaNova Llama 3.3</span>
+                                <div class="panel-metrics" id="arena-metric-3">Ready</div>
+                            </div>
+                            <div class="panel-body" id="arena-body-3">
+                                <div class="arena-placeholder">Awaiting prompt broadcast...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: PROVIDERS & KEYS -->
+            <section id="tab-providers" class="tab-pane">
+                <div class="providers-view">
+                    <div class="view-header glass-panel">
+                        <div>
+                            <h2><i class="fa-solid fa-network-wired"></i> Master Provider Directory (20 Providers)</h2>
+                            <p>Configure credentials, test latency, and check connectivity for all AI ecosystems.</p>
+                        </div>
+                        <div class="header-actions">
+                            <button id="ping-all-btn" class="secondary-btn">
+                                <i class="fa-solid fa-satellite-dish"></i> Ping & Check All Providers
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="providers-grid" id="providers-grid-container">
+                        <!-- Populated dynamically via app.js -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: 100% FREE AI HUB -->
+            <section id="tab-freehub" class="tab-pane">
+                <div class="freehub-view">
+                    <div class="view-header glass-panel">
+                        <div>
+                            <h2><i class="fa-solid fa-gift"></i> 100% Free AI Tier Hub</h2>
+                            <p>All verified zero-cost models that run without credit cards or upfront cost.</p>
+                        </div>
+                        <div class="free-badge-highlight">
+                            <i class="fa-solid fa-circle-check"></i> Verified No-Cost Endpoints
+                        </div>
+                    </div>
+
+                    <div class="freehub-grid">
+                        <div class="free-card glass-panel">
+                            <div class="card-icon"><i class="fa-brands fa-google"></i></div>
+                            <div class="card-content">
+                                <h3>Google AI Studio (Gemini 2.0)</h3>
+                                <p>Generous free requests per minute (RPM) for <code>gemini-2.0-flash</code> and <code>gemini-2.0-flash-thinking</code> with multimodal & code support.</p>
+                                <div class="free-features">
+                                    <span><i class="fa-solid fa-check"></i> 1 Million Context</span>
+                                    <span><i class="fa-solid fa-check"></i> Flash Thinking Reasoning</span>
+                                    <span><i class="fa-solid fa-check"></i> Free Key in 30 Seconds</span>
+                                </div>
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="free-btn">
+                                    <i class="fa-solid fa-key"></i> Get Free Gemini Key
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="free-card glass-panel">
+                            <div class="card-icon"><i class="fa-solid fa-bolt"></i></div>
+                            <div class="card-content">
+                                <h3>Groq LPU Cloud</h3>
+                                <p>World-record speed inference (500+ tok/s) on Llama 3.3 70B, Qwen 2.5, and Gemma 2 on their free developer tier.</p>
+                                <div class="free-features">
+                                    <span><i class="fa-solid fa-check"></i> 500+ tok/s Speed</span>
+                                    <span><i class="fa-solid fa-check"></i> Llama 3.3 70B Versatile</span>
+                                    <span><i class="fa-solid fa-check"></i> Free 30 RPM Tier</span>
+                                </div>
+                                <a href="https://console.groq.com/keys" target="_blank" class="free-btn">
+                                    <i class="fa-solid fa-key"></i> Get Free Groq Key
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="free-card glass-panel">
+                            <div class="card-icon"><i class="fa-solid fa-network-wired"></i></div>
+                            <div class="card-content">
+                                <h3>OpenRouter Free Model Pool</h3>
+                                <p>OpenRouter provides dedicated 100% free community endpoints for DeepSeek R1, Llama 3.3, Qwen Coder, and Gemini.</p>
+                                <div class="free-features">
+                                    <span><i class="fa-solid fa-check"></i> deepseek/deepseek-r1:free</span>
+                                    <span><i class="fa-solid fa-check"></i> meta-llama/llama-3.3-70b:free</span>
+                                    <span><i class="fa-solid fa-check"></i> qwen/qwen-2.5-coder-32b:free</span>
+                                </div>
+                                <a href="https://openrouter.ai/settings/keys" target="_blank" class="free-btn">
+                                    <i class="fa-solid fa-key"></i> Get Free OpenRouter Key
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="free-card glass-panel">
+                            <div class="card-icon"><i class="fa-solid fa-cube"></i></div>
+                            <div class="card-content">
+                                <h3>Cerebras & SambaNova Cloud</h3>
+                                <p>Wafer-scale supercomputer hardware offering ultra-fast free tiers for open LLM architectures.</p>
+                                <div class="free-features">
+                                    <span><i class="fa-solid fa-check"></i> 2000+ tok/s Cerebras</span>
+                                    <span><i class="fa-solid fa-check"></i> Llama 405B SambaNova</span>
+                                    <span><i class="fa-solid fa-check"></i> Free Developer Credits</span>
+                                </div>
+                                <a href="https://cloud.cerebras.ai/" target="_blank" class="free-btn">
+                                    <i class="fa-solid fa-key"></i> Get Cerebras Free Key
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="free-card glass-panel">
+                            <div class="card-icon"><i class="fa-solid fa-laptop-code"></i></div>
+                            <div class="card-content">
+                                <h3>Local Ollama / LM Studio (Offline)</h3>
+                                <p>100% free, runs locally on your PC/GPU with total privacy and zero internet requirement.</p>
+                                <div class="free-features">
+                                    <span><i class="fa-solid fa-check"></i> Zero Cost Forever</span>
+                                    <span><i class="fa-solid fa-check"></i> 100% Private Offline</span>
+                                    <span><i class="fa-solid fa-check"></i> Drop-in http://localhost:11434</span>
+                                </div>
+                                <a href="https://ollama.ai/" target="_blank" class="free-btn">
+                                    <i class="fa-solid fa-download"></i> Download Ollama
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: USER ANALYTICS & USAGE LOGS -->
+            <section id="tab-analytics" class="tab-pane">
+                <div class="analytics-view glass-panel">
+                    <div class="view-header">
+                        <div>
+                            <h2><i class="fa-solid fa-chart-pie"></i> User Information & Request Analytics</h2>
+                            <p>Real-time telemetry of users, client IPs, platforms, models invoked, and token throughput.</p>
+                        </div>
+                        <div class="header-actions">
+                            <button id="refresh-analytics-btn" class="secondary-btn">
+                                <i class="fa-solid fa-rotate"></i> Refresh Logs
+                            </button>
+                            <button id="clear-analytics-btn" class="secondary-btn" style="color:var(--accent-rose);">
+                                <i class="fa-solid fa-trash-can"></i> Clear History
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Overview Cards -->
+                    <div class="analytics-kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Unique Users / IPs</span>
+                                <span class="kpi-value" id="kpi-users">0</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fa-solid fa-bolt"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Total API Calls</span>
+                                <span class="kpi-value" id="kpi-requests">0</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fa-solid fa-coins"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Tokens Processed</span>
+                                <span class="kpi-value" id="kpi-tokens">0</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fa-solid fa-gauge-high"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Average Latency</span>
+                                <span class="kpi-value" id="kpi-latency">0 ms</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Activity Table -->
+                    <div class="analytics-table-wrapper">
+                        <h3 style="margin-bottom:12px; font-family:var(--font-heading); font-size:1.05rem;">
+                            <i class="fa-solid fa-clock-rotate-left"></i> Live User Activity & Request Log
+                        </h3>
+                        <div class="table-container">
+                            <table class="analytics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Client IP</th>
+                                        <th>Platform / Client</th>
+                                        <th>Provider & Model</th>
+                                        <th>Latency</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="analytics-tbody">
+                                    <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:20px;">No requests recorded yet. Make a query to see live telemetry!</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 5: ANTIGRAVITY & UNIVERSAL SDK GUIDE -->
+            <section id="tab-proxy" class="tab-pane">
+                <div class="proxy-view glass-panel">
+                    <div class="proxy-header">
+                        <h2><i class="fa-solid fa-terminal"></i> Universal Antigravity & SDK Gateway</h2>
+                        <p>Use this running server as a single drop-in OpenAI-compatible proxy (<code>http://localhost:8000/v1</code>) for any AI agent, coding assistant, or script.</p>
+                    </div>
+
+                    <div class="code-snippets-grid">
+                        <!-- Antigravity Native Python Bridge -->
+                        <div class="code-card">
+                            <div class="code-header">
+                                <span><i class="fa-brands fa-python"></i> 1. Antigravity Python Bridge (Native)</span>
+                                <button class="copy-code-btn" data-target="snippet-antigravity"><i class="fa-regular fa-copy"></i> Copy</button>
+                            </div>
+                            <pre><code class="language-python" id="snippet-antigravity">from antigravity_bridge import OmniAI
+
+# Initialize gateway
+ai = OmniAI()
+
+# 1. Smart Auto-Routing (automatically analyzes complexity and picks model):
+response = ai.chat("Explain quantum key distribution with a diagram.")
+print(response)
+
+# 2. Use 100% Free Tier:
+free_res = ai.chat("Write a fast binary search in Python", profile="free_tier")
+print(free_res)
+
+# 3. Direct provider query:
+claude_res = ai.chat("Refactor my backend code", provider="anthropic", model="claude-3-7-sonnet-20250219")
+print(claude_res)</code></pre>
+                        </div>
+
+                        <!-- OpenAI Python SDK Proxy -->
+                        <div class="code-card">
+                            <div class="code-header">
+                                <span><i class="fa-brands fa-python"></i> 2. Standard OpenAI Python SDK</span>
+                                <button class="copy-code-btn" data-target="snippet-openai-py"><i class="fa-regular fa-copy"></i> Copy</button>
+                            </div>
+                            <pre><code class="language-python" id="snippet-openai-py">from openai import OpenAI
+
+# Connect to local OmniModel Gateway
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="omnimodel-local" # any placeholder key
+)
+
+# Call smart auto-router or any specific model across 20 providers:
+response = client.chat.completions.create(
+    model="auto", # or "groq/llama-3.3-70b-versatile", "gemini/gemini-2.0-flash", etc.
+    messages=[{"role": "user", "content": "What is the capital of France?"}],
+    stream=True
+)
+
+for chunk in response:
+    content = chunk.choices[0].delta.content or ""
+    print(content, end="", flush=True)</code></pre>
+                        </div>
+
+                        <!-- Node.js / TypeScript SDK -->
+                        <div class="code-card">
+                            <div class="code-header">
+                                <span><i class="fa-brands fa-node-js"></i> 3. JavaScript / Node.js SDK</span>
+                                <button class="copy-code-btn" data-target="snippet-node"><i class="fa-regular fa-copy"></i> Copy</button>
+                            </div>
+                            <pre><code class="language-javascript" id="snippet-node">import OpenAI from "openai";
+
+const openai = new OpenAI({
+  baseURL: "http://localhost:8000/v1",
+  apiKey: "omnimodel-local",
+});
+
+async function main() {
+  const completion = await openai.chat.completions.create({
+    model: "free_tier", // Routes to verified free endpoints
+    messages: [{ role: "user", content: "Hello from OmniModel Gateway!" }],
+  });
+  console.log(completion.choices[0].message.content);
+}
+main();</code></pre>
+                        </div>
+
+                        <!-- cURL Command -->
+                        <div class="code-card">
+                            <div class="code-header">
+                                <span><i class="fa-solid fa-code"></i> 4. cURL Terminal Request</span>
+                                <button class="copy-code-btn" data-target="snippet-curl"><i class="fa-regular fa-copy"></i> Copy</button>
+                            </div>
+                            <pre><code class="language-bash" id="snippet-curl">curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "auto",
+    "messages": [{"role": "user", "content": "Hello OmniModel!"}],
+    "stream": false
+  }'</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Edit Key Modal -->
+    <div id="key-modal" class="modal-overlay hidden">
+        <div class="modal-card glass-panel">
+            <div class="modal-header">
+                <h3 id="modal-provider-name">Configure API Key</h3>
+                <button id="modal-close-btn" class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-provider-desc"></p>
+                <div class="modal-field">
+                    <label id="modal-env-label">Environment Variable</label>
+                    <input type="password" id="modal-key-input" placeholder="Paste your API key here..." autocomplete="off">
+                </div>
+                <div class="modal-help">
+                    <a id="modal-key-link" href="#" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i> Get Free / Account API Key</a>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel-btn" class="secondary-btn">Cancel</button>
+                <button id="modal-save-btn" class="primary-btn"><i class="fa-solid fa-save"></i> Save Key</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
