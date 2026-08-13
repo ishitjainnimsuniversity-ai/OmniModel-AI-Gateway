@@ -27,9 +27,11 @@ class GatewayConfig:
 
     @classmethod
     def get_key(cls, env_var: str) -> Optional[str]:
+        cls.reload_env()
         val = os.getenv(env_var)
         if val and val.strip():
-            return val.strip()
+            clean = val.strip().strip("'\"")
+            return clean if len(clean) > 0 else None
         return None
 
     @classmethod

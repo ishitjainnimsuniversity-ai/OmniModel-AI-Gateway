@@ -85,6 +85,14 @@ async def get_ai_bg_jpg():
         return FileResponse(str(bg_path), media_type="image/jpeg")
     return JSONResponse(status_code=404, content={"error": "bg not found"})
 
+@app.get("/ai_wheel.png")
+async def get_ai_wheel_png():
+    from fastapi.responses import FileResponse
+    wheel_path = PUBLIC_DIR / "ai_wheel.png"
+    if wheel_path.exists():
+        return FileResponse(str(wheel_path), media_type="image/png")
+    return JSONResponse(status_code=404, content={"error": "wheel not found"})
+
 # Request Models
 class ChatMessage(BaseModel):
     role: str
@@ -346,7 +354,8 @@ async def ping_provider(provider_id: str):
 @app.post("/api/chat/stream")
 async def api_chat_stream(
     request: Request,
-    messages: List[ChatMessage] = Body(...),
+    messages: Optional[List[Dict[str, Any]]] = Body(None),
+    prompt: Optional[str] = Body(None),
     provider: Optional[str] = Body(None),
     model: Optional[str] = Body(None),
     profile: Optional[str] = Body(None),
@@ -355,7 +364,14 @@ async def api_chat_stream(
 ):
     client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "127.0.0.1")
     user_agent = request.headers.get("user-agent", "Web-Browser")
-    raw_messages = [{"role": m.role, "content": m.content} for m in messages]
+    
+    if messages:
+        raw_messages = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in messages]
+    elif prompt:
+        raw_messages = [{"role": "user", "content": prompt}]
+    else:
+        raw_messages = [{"role": "user", "content": "Hello"}]
+
     prompt_snippet = raw_messages[-1]["content"] if raw_messages else ""
     start_time = time.perf_counter()
 

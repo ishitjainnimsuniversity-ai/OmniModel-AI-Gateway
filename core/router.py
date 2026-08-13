@@ -15,19 +15,20 @@ class SmartRouter:
             "name": "⚡ Ultra-Fast Speed (<150ms)",
             "description": "Blazing fast inference via custom LPU/wafer hardware",
             "chain": [
+                ("gemini", "gemini-flash-latest"),
                 ("groq", "llama-3.3-70b-versatile"),
                 ("cerebras", "llama3.1-70b"),
                 ("sambanova", "Meta-Llama-3.3-70B-Instruct"),
-                ("openrouter", "meta-llama/llama-3.3-70b-instruct:free"),
-                ("gemini", "gemini-2.0-flash")
+                ("openrouter", "meta-llama/llama-3.3-70b-instruct:free")
             ]
         },
         "reasoning": {
             "name": "🧠 Deep Reasoning & Math",
             "description": "Complex chain-of-thought, mathematical proof, logic and deep planning",
             "chain": [
+                ("gemini", "gemini-flash-latest"),
+                ("gemini", "gemma-4-31b-it"),
                 ("deepseek", "deepseek-reasoner"),
-                ("gemini", "gemini-2.0-flash-thinking-exp-01-21"),
                 ("groq", "deepseek-r1-distill-llama-70b"),
                 ("openrouter", "deepseek/deepseek-r1:free"),
                 ("openai", "o3-mini"),
@@ -38,8 +39,8 @@ class SmartRouter:
             "name": "💻 Elite Software Architecture & Code",
             "description": "Complex full-stack coding, refactoring, debugging and algorithmic synthesis",
             "chain": [
+                ("gemini", "gemini-flash-latest"),
                 ("anthropic", "claude-3-7-sonnet-20250219"),
-                ("gemini", "gemini-2.0-pro-exp-02-05"),
                 ("mistral", "codestral-latest"),
                 ("openrouter", "qwen/qwen-2.5-coder-32b-instruct:free"),
                 ("openai", "gpt-4o"),
@@ -50,8 +51,8 @@ class SmartRouter:
             "name": "🌐 Live Web Search & Grounding",
             "description": "Real-time web retrieval, current news, fact checking and source citations",
             "chain": [
+                ("gemini", "gemini-flash-latest"),
                 ("perplexity", "sonar"),
-                ("gemini", "gemini-2.0-flash"),
                 ("openrouter", "google/gemini-2.0-flash-exp:free")
             ]
         },
@@ -59,10 +60,10 @@ class SmartRouter:
             "name": "🆓 100% Zero-Cost / Free Tier",
             "description": "Auto-routes to verified 100% free models without credit card requirements",
             "chain": [
+                ("gemini", "gemini-flash-latest"),
                 ("openrouter", "deepseek/deepseek-r1:free"),
                 ("openrouter", "meta-llama/llama-3.3-70b-instruct:free"),
                 ("groq", "llama-3.3-70b-versatile"),
-                ("gemini", "gemini-2.0-flash"),
                 ("huggingface", "meta-llama/Llama-3.3-70B-Instruct"),
                 ("cerebras", "llama3.1-70b"),
                 ("sambanova", "Meta-Llama-3.3-70B-Instruct"),
@@ -73,7 +74,7 @@ class SmartRouter:
             "name": "⚖️ Balanced Frontier Intelligence",
             "description": "Optimal balance of quality, speed and conversational fluency",
             "chain": [
-                ("gemini", "gemini-2.0-flash"),
+                ("gemini", "gemini-flash-latest"),
                 ("groq", "llama-3.3-70b-versatile"),
                 ("openai", "gpt-4o"),
                 ("anthropic", "claude-3-5-sonnet-20241022"),

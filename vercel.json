@@ -6,7 +6,7 @@
       "destination": "/public/$1"
     },
     {
-      "source": "/(style.css|app.js|logo.png|ai_bg.jpg|genesis_logo.png|alfa_logo.png)",
+      "source": "/(style.css|app.js|logo.png|ai_bg.jpg|ai_wheel.png|genesis_logo.png|alfa_logo.png)",
       "destination": "/public/$1"
     },
     {

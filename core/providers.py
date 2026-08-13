@@ -12,7 +12,7 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "category": "Frontier Multimodal & Reasoning",
         "env_var": "GEMINI_API_KEY",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
-        "default_model": "gemini-2.0-flash",
+        "default_model": "gemini-flash-latest",
         "free_tier_available": True,
         "free_tier_note": "Generous free RPM on Google AI Studio without credit card",
         "free_key_url": "https://aistudio.google.com/app/apikey",
@@ -20,10 +20,9 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "catalog_url": "https://ai.google.dev/gemini-api/docs/models",
         "format_type": "gemini",
         "models": [
-            {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash", "context": "1M", "speed": "Ultra Fast", "free": True, "tags": ["fast", "multimodal", "free_tier", "search"]},
-            {"id": "gemini-2.0-flash-thinking-exp-01-21", "name": "Gemini 2.0 Flash Thinking", "context": "1M", "speed": "Fast", "free": True, "tags": ["reasoning", "math", "code", "free_tier"]},
-            {"id": "gemini-2.0-pro-exp-02-05", "name": "Gemini 2.0 Pro", "context": "2M", "speed": "High Quality", "free": True, "tags": ["frontier", "coding", "complex", "free_tier"]},
-            {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro", "context": "2M", "speed": "Moderate", "free": True, "tags": ["massive_context", "analysis"]}
+            {"id": "gemini-flash-latest", "name": "Gemini Flash Latest", "context": "1M", "speed": "Ultra Fast", "free": True, "tags": ["fast", "multimodal", "free_tier", "search"]},
+            {"id": "gemma-4-31b-it", "name": "Gemma 4 31B IT", "context": "128k", "speed": "Fast", "free": True, "tags": ["reasoning", "math", "code", "free_tier"]},
+            {"id": "gemini-pro-latest", "name": "Gemini Pro Latest", "context": "2M", "speed": "High Quality", "free": True, "tags": ["frontier", "coding", "complex", "free_tier"]}
         ]
     },
     "groq": {
