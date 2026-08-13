@@ -1,630 +1,935 @@
 /**
- * OmniModel AI Gateway - Frontend Controller & Real-Time SSE Stream Manager
+ * GENESIS AI 5.0 - Universal Cognitive Operating System & GUI Controller
+ * 2026 Edition
  */
 
-document.addEventListener("DOMContentLoaded", () => {
-    // App State
-    const state = {
-        activeTab: "chat",
-        selectedProfile: "auto",
-        selectedModel: "auto",
-        temperature: 0.7,
-        providers: {},
-        messages: [],
-        isStreaming: false
-    };
+// ==========================================
+// 1. STATE & GLOBAL CONFIGURATION
+// ==========================================
+const state = {
+    activeTab: 'chat',
+    activeProfile: 'auto',
+    activeModel: 'auto',
+    temperature: 0.7,
+    isStreaming: false,
+    soundEffects: true,
+    activeTheme: 'quantum',
+    providers: {},
+    totalRequests: 0,
+    totalTokens: 0,
+    startTime: 0,
+    tokenCounter: 0,
+};
 
-    // DOM Elements
-    const tabButtons = document.querySelectorAll(".tab-btn");
-    const tabPanes = document.querySelectorAll(".tab-pane");
-    const activeProvidersCountEl = document.getElementById("active-providers-count");
-    
-    // Chat Elements
-    const chatMessagesEl = document.getElementById("chat-messages");
-    const chatInputEl = document.getElementById("chat-input");
-    const sendBtnEl = document.getElementById("send-btn");
-    const profileSelector = document.getElementById("profile-selector");
-    const directModelSelect = document.getElementById("direct-model-select");
-    const tempSlider = document.getElementById("temp-slider");
-    const tempValEl = document.getElementById("temp-val");
-    const routingBanner = document.getElementById("routing-banner");
-    const routeBannerTitle = document.getElementById("route-banner-title");
-    const routeBannerDesc = document.getElementById("route-banner-desc");
-    const routeBannerTags = document.getElementById("route-banner-tags");
-    const activeRouteDisplay = document.getElementById("active-route-display");
-    const clearChatBtn = document.getElementById("clear-chat-btn");
-
-    // Arena Elements
-    const arenaPromptInput = document.getElementById("arena-prompt-input");
-    const arenaBroadcastBtn = document.getElementById("arena-broadcast-btn");
-
-    // Modal Elements
-    const keyModal = document.getElementById("key-modal");
-    const modalCloseBtn = document.getElementById("modal-close-btn");
-    const modalCancelBtn = document.getElementById("modal-cancel-btn");
-    const modalSaveBtn = document.getElementById("modal-save-btn");
-    const modalProviderName = document.getElementById("modal-provider-name");
-    const modalProviderDesc = document.getElementById("modal-provider-desc");
-    const modalEnvLabel = document.getElementById("modal-env-label");
-    const modalKeyInput = document.getElementById("modal-key-input");
-    const modalKeyLink = document.getElementById("modal-key-link");
-
-    // Toast Element
-    const toastEl = document.getElementById("toast");
-
-    let currentEditingEnvVar = null;
-
-    // ------------------------------------------------------------------------
-    // 1. Toast Notification Utility
-    // ------------------------------------------------------------------------
-    function showToast(message, duration = 3000) {
-        toastEl.textContent = message;
-        toastEl.classList.remove("hidden");
-        setTimeout(() => {
-            toastEl.classList.add("hidden");
-        }, duration);
+// ==========================================
+// 2. AUDIO SYNTHESIS ENGINE (Sci-Fi Sound FX)
+// ==========================================
+class SoundFX {
+    constructor() {
+        this.ctx = null;
     }
 
-    // ------------------------------------------------------------------------
-    // 2. Tab Navigation
-    // ------------------------------------------------------------------------
-    tabButtons.forEach(btn => {
-        btn.addEventListener("click", () => {
-            const targetTab = btn.dataset.tab;
-            tabButtons.forEach(b => b.classList.remove("active"));
-            tabPanes.forEach(p => p.classList.remove("active"));
-
-            btn.classList.add("active");
-            document.getElementById(`tab-${targetTab}`).classList.add("active");
-            state.activeTab = targetTab;
-        });
-    });
-
-    // ------------------------------------------------------------------------
-    // 3. Provider Data & Model Loading
-    // ------------------------------------------------------------------------
-    async function loadProviders() {
-        try {
-            const res = await fetch("/api/providers");
-            const data = await res.json();
-            if (data.success) {
-                state.providers = data.providers;
-                renderProvidersGrid();
-                populateModelDropdowns();
-                updateActiveProvidersCount();
-            }
-        } catch (err) {
-            console.error("Failed to load providers:", err);
-            activeProvidersCountEl.textContent = "Gateway Offline";
+    init() {
+        if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         }
     }
 
-    function updateActiveProvidersCount() {
-        const total = Object.keys(state.providers).length;
-        const active = Object.values(state.providers).filter(p => p.has_key).length;
-        activeProvidersCountEl.textContent = `${active}/${total} Providers Ready`;
+    playClick() {
+        if (!state.soundEffects) return;
+        this.init();
+        if (!this.ctx) return;
+        try {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.05);
+            gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + 0.05);
+        } catch(e) {}
     }
 
-    function renderProvidersGrid() {
-        const container = document.getElementById("providers-grid-container");
-        if (!container) return;
-        container.innerHTML = "";
+    playTransmit() {
+        if (!state.soundEffects) return;
+        this.init();
+        if (!this.ctx) return;
+        try {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.12);
+            gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + 0.12);
+        } catch(e) {}
+    }
 
-        Object.values(state.providers).forEach(p => {
-            const card = document.createElement("div");
-            card.className = "provider-card glass-panel";
+    playComplete() {
+        if (!state.soundEffects) return;
+        this.init();
+        if (!this.ctx) return;
+        try {
+            const now = this.ctx.currentTime;
+            const osc1 = this.ctx.createOscillator();
+            const osc2 = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc1.type = 'sine';
+            osc2.type = 'sine';
+            osc1.frequency.setValueAtTime(587.33, now); // D5
+            osc2.frequency.setValueAtTime(880, now + 0.08); // A5
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc1.start(now);
+            osc1.stop(now + 0.08);
+            osc2.start(now + 0.08);
+            osc2.stop(now + 0.25);
+        } catch(e) {}
+    }
+}
+const sfx = new SoundFX();
+
+// ==========================================
+// 3. INTERACTIVE PARTICLE CANVAS BACKGROUND
+// ==========================================
+function initNeuralCanvas() {
+    const canvas = document.getElementById('neural-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    });
+
+    const particles = [];
+    const particleCount = Math.min(Math.floor((width * height) / 18000), 75);
+
+    for (let i = 0; i < particleCount; i++) {
+        particles.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            vx: (Math.random() - 0.5) * 0.4,
+            vy: (Math.random() - 0.5) * 0.4,
+            radius: Math.random() * 2 + 1,
+            alpha: Math.random() * 0.5 + 0.2
+        });
+    }
+
+    let mouse = { x: null, y: null };
+    window.addEventListener('mousemove', (e) => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+    });
+
+    function draw() {
+        ctx.clearRect(0, 0, width, height);
+
+        for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+
+            if (p.x < 0 || p.x > width) p.vx *= -1;
+            if (p.y < 0 || p.y > height) p.vy *= -1;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0, 240, 255, ${p.alpha})`;
+            ctx.fill();
+
+            // Connect lines
+            for (let j = i + 1; j < particles.length; j++) {
+                const p2 = particles[j];
+                const dx = p.x - p2.x;
+                const dy = p.y - p2.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 130) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.strokeStyle = `rgba(0, 240, 255, ${0.15 * (1 - dist / 130)})`;
+                    ctx.lineWidth = 0.8;
+                    ctx.stroke();
+                }
+            }
+
+            // Mouse proximity
+            if (mouse.x !== null) {
+                const mdx = p.x - mouse.x;
+                const mdy = p.y - mouse.y;
+                const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+                if (mdist < 150) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(mouse.x, mouse.y);
+                    ctx.strokeStyle = `rgba(139, 92, 246, ${0.3 * (1 - mdist / 150)})`;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
+        }
+        requestAnimationFrame(draw);
+    }
+    draw();
+}
+
+// ==========================================
+// 4. UI NAVIGATION & WORKSPACE TABS
+// ==========================================
+function initNavigation() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.dataset.tab;
+            sfx.playClick();
+            switchTab(tabName);
+        });
+    });
+
+    // Theme Picker
+    const themeBtn = document.getElementById('theme-btn');
+    const themeMenu = document.getElementById('theme-menu');
+    if (themeBtn && themeMenu) {
+        themeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            themeMenu.classList.toggle('hidden');
+            sfx.playClick();
+        });
+
+        document.addEventListener('click', () => {
+            themeMenu.classList.add('hidden');
+        });
+
+        document.querySelectorAll('.theme-opt').forEach(opt => {
+            opt.addEventListener('click', () => {
+                const chosen = opt.dataset.setTheme;
+                document.documentElement.setAttribute('data-theme', chosen);
+                document.querySelectorAll('.theme-opt').forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+                state.activeTheme = chosen;
+                showToast(`Theme switched to ${chosen.toUpperCase()}`);
+                sfx.playClick();
+            });
+        });
+    }
+
+    // Audio SFX Toggle
+    const sfxBtn = document.getElementById('sfx-toggle-btn');
+    if (sfxBtn) {
+        sfxBtn.addEventListener('click', () => {
+            state.soundEffects = !state.soundEffects;
+            sfxBtn.classList.toggle('active', state.soundEffects);
+            sfxBtn.innerHTML = state.soundEffects ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
+            showToast(state.soundEffects ? 'Sound FX Enabled' : 'Sound FX Muted');
+            if (state.soundEffects) sfx.playClick();
+        });
+    }
+
+    // Fullscreen Toggle
+    const fsBtn = document.getElementById('fullscreen-btn');
+    if (fsBtn) {
+        fsBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+            sfx.playClick();
+        });
+    }
+}
+
+function switchTab(tabName) {
+    state.activeTab = tabName;
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.tab-pane').forEach(p => {
+        p.classList.toggle('active', p.id === `tab-${tabName}`);
+    });
+
+    if (tabName === 'providers') loadProviders();
+    if (tabName === 'analytics') loadAnalytics();
+}
+
+// ==========================================
+// 5. COGNITIVE CHAT CONTROLLER
+// ==========================================
+function initChat() {
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const tempSlider = document.getElementById('temp-slider');
+    const tempVal = document.getElementById('temp-val');
+    const clearBtn = document.getElementById('clear-chat-btn');
+    const directModelSelect = document.getElementById('direct-model-select');
+
+    // Profile Chips
+    document.querySelectorAll('.profile-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            document.querySelectorAll('.profile-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            state.activeProfile = chip.dataset.profile;
+            sfx.playClick();
             
-            const isLocal = p.id === "ollama";
-            const badgeClass = p.has_key ? "status-active" : "status-missing";
-            const badgeText = isLocal ? "Local Offline" : (p.has_key ? "Configured" : "Key Needed");
-            const icon = p.has_key ? "fa-circle-check" : "fa-key";
+            const activeRouteDisplay = document.getElementById('active-route-display');
+            if (activeRouteDisplay) {
+                activeRouteDisplay.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Mode: ${chip.querySelector('.chip-title').innerText}`;
+            }
 
+            // Sync select
+            if (state.activeProfile === 'auto') {
+                directModelSelect.value = 'auto';
+            } else if (state.activeProfile === 'free_tier') {
+                directModelSelect.value = 'genesis-5.0-free';
+            } else if (state.activeProfile === 'speed') {
+                directModelSelect.value = 'genesis-5.0-speed';
+            } else if (state.activeProfile === 'reasoning') {
+                directModelSelect.value = 'genesis-5.0-reasoning';
+            } else if (state.activeProfile === 'coding') {
+                directModelSelect.value = 'genesis-5.0-coder';
+            } else if (state.activeProfile === 'search') {
+                directModelSelect.value = 'genesis-5.0-search';
+            }
+        });
+    });
+
+    // Model Select
+    if (directModelSelect) {
+        directModelSelect.addEventListener('change', () => {
+            state.activeModel = directModelSelect.value;
+            sfx.playClick();
+        });
+    }
+
+    // Temperature
+    if (tempSlider && tempVal) {
+        tempSlider.addEventListener('input', () => {
+            state.temperature = parseFloat(tempSlider.value);
+            tempVal.innerText = state.temperature.toFixed(2);
+        });
+    }
+
+    // Send on Enter
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitChat();
+            }
+        });
+        chatInput.addEventListener('input', () => {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+        });
+    }
+
+    if (sendBtn) {
+        sendBtn.addEventListener('click', submitChat);
+    }
+
+    // Quick Prompts
+    document.querySelectorAll('.quick-prompt').forEach(qp => {
+        qp.addEventListener('click', () => {
+            const prompt = qp.dataset.prompt;
+            if (chatInput) {
+                chatInput.value = prompt;
+                submitChat();
+            }
+        });
+    });
+
+    // Clear Chat
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            const container = document.getElementById('chat-messages');
+            if (container) {
+                container.innerHTML = `
+                <div class="welcome-card glass-panel">
+                    <div class="welcome-logo-wrap">
+                        <img src="/static/logo.png" alt="GENESIS AI 5.0" class="welcome-logo">
+                        <div class="welcome-halo"></div>
+                    </div>
+                    <h2>GENESIS AI 5.0 Stream Cleared</h2>
+                    <p>Ready for next prompt. Cognitive router is armed with 20+ frontier AI ecosystems.</p>
+                </div>`;
+            }
+            sfx.playClick();
+        });
+    }
+
+    // Voice Input (Speech Recognition)
+    initVoiceInput();
+}
+
+async function submitChat() {
+    const input = document.getElementById('chat-input');
+    const prompt = input.value.trim();
+    if (!prompt || state.isStreaming) return;
+
+    input.value = '';
+    input.style.height = 'auto';
+    state.isStreaming = true;
+    sfx.playTransmit();
+
+    const messagesContainer = document.getElementById('chat-messages');
+    
+    // Remove welcome card if present
+    const welcomeCard = messagesContainer.querySelector('.welcome-card');
+    if (welcomeCard) welcomeCard.remove();
+
+    // Render User Message
+    const userRow = document.createElement('div');
+    userRow.className = 'message-row user';
+    userRow.innerHTML = `
+        <div class="msg-bubble">
+            <div class="msg-body">${escapeHtml(prompt)}</div>
+        </div>
+        <div class="msg-avatar user"><i class="fa-solid fa-user"></i></div>
+    `;
+    messagesContainer.appendChild(userRow);
+
+    // Show Routing Banner
+    const routingBanner = document.getElementById('routing-banner');
+    const routeTitle = document.getElementById('route-banner-title');
+    const routeDesc = document.getElementById('route-banner-desc');
+    const routeTags = document.getElementById('route-banner-tags');
+    if (routingBanner) {
+        routingBanner.classList.remove('hidden');
+        routeTitle.innerText = "GENESIS Cognitive Router Armed";
+        routeDesc.innerText = `Analyzing prompt intent for profile: ${state.activeProfile.toUpperCase()}...`;
+        routeTags.innerHTML = `<span class="banner-tag-item">PROFILE: ${state.activeProfile}</span><span class="banner-tag-item">TEMP: ${state.temperature}</span>`;
+    }
+
+    // Render AI Stream Placeholder
+    const aiRow = document.createElement('div');
+    aiRow.className = 'message-row ai';
+    const msgId = 'msg-' + Date.now();
+    aiRow.innerHTML = `
+        <div class="msg-avatar ai"><i class="fa-solid fa-brain-circuit"></i></div>
+        <div class="msg-bubble">
+            <div class="msg-header">
+                <div class="msg-header-left">
+                    <span class="msg-provider-tag" id="${msgId}-tag">GENESIS AI 5.0</span>
+                    <span class="msg-latency-tag" id="${msgId}-latency"><i class="fa-solid fa-spinner fa-spin"></i> Routing...</span>
+                </div>
+                <div class="msg-actions">
+                    <button class="msg-action-btn copy-btn" title="Copy Text" onclick="copyMessage('${msgId}')"><i class="fa-regular fa-copy"></i></button>
+                    <button class="msg-action-btn speak-btn" title="Read Aloud" onclick="speakMessage('${msgId}')"><i class="fa-solid fa-volume-high"></i></button>
+                </div>
+            </div>
+            <div class="msg-body" id="${msgId}-body"><span class="typing-cursor">▌</span></div>
+        </div>
+    `;
+    messagesContainer.appendChild(aiRow);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Start SSE Stream
+    state.startTime = performance.now();
+    state.tokenCounter = 0;
+
+    try {
+        const payload = {
+            prompt: prompt,
+            profile: state.activeProfile,
+            model: state.activeModel !== 'auto' ? state.activeModel : undefined,
+            temperature: state.temperature,
+            stream: true
+        };
+
+        const res = await fetch('/api/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        const bodyEl = document.getElementById(`${msgId}-body`);
+        const tagEl = document.getElementById(`${msgId}-tag`);
+        const latEl = document.getElementById(`${msgId}-latency`);
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const dataStr = line.slice(6).trim();
+                    if (!dataStr) continue;
+
+                    try {
+                        const parsed = JSON.parse(dataStr);
+                        if (parsed.content) {
+                            fullText += parsed.content;
+                            state.tokenCounter += parsed.content.split(/\s+/).length || 1;
+                            
+                            // Render markdown
+                            if (window.marked) {
+                                bodyEl.innerHTML = marked.parse(fullText);
+                            } else {
+                                bodyEl.innerText = fullText;
+                            }
+
+                            // Update live token speed
+                            const elapsedSec = (performance.now() - state.startTime) / 1000;
+                            const speed = Math.round(state.tokenCounter / (elapsedSec || 1));
+                            const hudSpeed = document.getElementById('hud-tok-speed');
+                            if (hudSpeed) hudSpeed.innerText = `${speed} tok/s`;
+
+                        } else if (parsed.meta) {
+                            // Routing metadata arrived
+                            if (tagEl) tagEl.innerText = `${parsed.meta.provider.toUpperCase()} / ${parsed.meta.model}`;
+                            if (routeTitle) routeTitle.innerText = `Routed to ${parsed.meta.provider.toUpperCase()}`;
+                            if (routeDesc) routeDesc.innerText = `Intent: ${parsed.meta.intent} | Fallback Waterfall Active`;
+                        }
+                    } catch(e) {}
+                }
+            }
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        const totalLatency = Math.round(performance.now() - state.startTime);
+        if (latEl) latEl.innerText = `${totalLatency} ms`;
+        
+        // Highlight code blocks
+        if (window.hljs) {
+            bodyEl.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        sfx.playComplete();
+
+    } catch (err) {
+        const bodyEl = document.getElementById(`${msgId}-body`);
+        if (bodyEl) bodyEl.innerHTML = `<span style="color:var(--accent-rose)"><i class="fa-solid fa-triangle-exclamation"></i> Error: ${err.message}</span>`;
+    } finally {
+        state.isStreaming = false;
+    }
+}
+
+// Copy & TTS helpers
+window.copyMessage = function(msgId) {
+    const bodyEl = document.getElementById(`${msgId}-body`);
+    if (bodyEl) {
+        navigator.clipboard.writeText(bodyEl.innerText);
+        showToast('Response copied to clipboard!');
+        sfx.playClick();
+    }
+};
+
+window.speakMessage = function(msgId) {
+    const bodyEl = document.getElementById(`${msgId}-body`);
+    if (bodyEl && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(bodyEl.innerText);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+        showToast('Speaking response...');
+        sfx.playClick();
+    }
+};
+
+// ==========================================
+// 6. VOICE DICTATION (Speech-To-Text)
+// ==========================================
+function initVoiceInput() {
+    const micBtn = document.getElementById('voice-input-btn');
+    const waveBar = document.getElementById('voice-wave-bar');
+    const chatInput = document.getElementById('chat-input');
+    const voiceStatus = document.getElementById('voice-status-text');
+
+    if (!micBtn) return;
+
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+        micBtn.title = "Voice recognition not supported in this browser";
+        return;
+    }
+
+    const recognition = new SpeechRec();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    let isListening = false;
+
+    micBtn.addEventListener('click', () => {
+        if (!isListening) {
+            recognition.start();
+            isListening = true;
+            micBtn.classList.add('listening');
+            if (waveBar) waveBar.classList.remove('hidden');
+            if (voiceStatus) voiceStatus.innerText = "Listening to your voice...";
+            sfx.playTransmit();
+        } else {
+            recognition.stop();
+            isListening = false;
+            micBtn.classList.remove('listening');
+            if (waveBar) waveBar.classList.add('hidden');
+        }
+    });
+
+    recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+        }
+        if (chatInput) chatInput.value = transcript;
+    };
+
+    recognition.onend = () => {
+        isListening = false;
+        micBtn.classList.remove('listening');
+        if (waveBar) waveBar.classList.add('hidden');
+    };
+
+    recognition.onerror = (e) => {
+        isListening = false;
+        micBtn.classList.remove('listening');
+        if (waveBar) waveBar.classList.add('hidden');
+        showToast(`Voice Error: ${e.error}`);
+    };
+}
+
+// ==========================================
+// 7. 4-WAY MODEL ARENA (The Colosseum)
+// ==========================================
+function initArena() {
+    const broadcastBtn = document.getElementById('arena-broadcast-btn');
+    const promptInput = document.getElementById('arena-prompt-input');
+
+    if (!broadcastBtn || !promptInput) return;
+
+    broadcastBtn.addEventListener('click', launchArenaDuel);
+    promptInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') launchArenaDuel();
+    });
+}
+
+async function launchArenaDuel() {
+    const promptInput = document.getElementById('arena-prompt-input');
+    const prompt = promptInput.value.trim();
+    if (!prompt) return;
+
+    sfx.playTransmit();
+
+    const selectedModels = [
+        document.getElementById('arena-model-0').value,
+        document.getElementById('arena-model-1').value,
+        document.getElementById('arena-model-2').value,
+        document.getElementById('arena-model-3').value,
+    ];
+
+    // Reset arena panels
+    for (let i = 0; i < 4; i++) {
+        const bodyEl = document.getElementById(`arena-body-${i}`);
+        const metricEl = document.getElementById(`arena-metric-${i}`);
+        const nameEl = document.getElementById(`arena-name-${i}`);
+        if (bodyEl) bodyEl.innerHTML = '<span class="typing-cursor">▌ Generating stream...</span>';
+        if (metricEl) metricEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Racing...';
+        if (nameEl) nameEl.innerText = selectedModels[i];
+    }
+
+    // Launch 4 concurrent requests
+    selectedModels.forEach((modelKey, index) => {
+        const [provider, model] = modelKey.split('/');
+        const startTime = performance.now();
+
+        fetch('/api/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: prompt,
+                provider: provider,
+                model: model,
+                stream: true
+            })
+        }).then(res => {
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let text = '';
+            const bodyEl = document.getElementById(`arena-body-${index}`);
+            const metricEl = document.getElementById(`arena-metric-${index}`);
+
+            function readChunk() {
+                reader.read().then(({ value, done }) => {
+                    if (done) {
+                        const totalLat = Math.round(performance.now() - startTime);
+                        if (metricEl) metricEl.innerHTML = `<span style="color:var(--accent-emerald); font-weight:700;">✓ ${totalLat} ms</span>`;
+                        if (window.marked && bodyEl) bodyEl.innerHTML = marked.parse(text);
+                        return;
+                    }
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const p = JSON.parse(line.slice(6));
+                                if (p.content) text += p.content;
+                            } catch(e) {}
+                        }
+                    }
+                    if (bodyEl) bodyEl.innerText = text;
+                    readChunk();
+                });
+            }
+            readChunk();
+        }).catch(err => {
+            const bodyEl = document.getElementById(`arena-body-${index}`);
+            const metricEl = document.getElementById(`arena-metric-${index}`);
+            if (bodyEl) bodyEl.innerHTML = `<span style="color:var(--accent-rose)">Failed: ${err.message}</span>`;
+            if (metricEl) metricEl.innerText = "Error";
+        });
+    });
+}
+
+// ==========================================
+// 8. PROVIDER COMMAND CENTER (20 Providers)
+// ==========================================
+async function loadProviders() {
+    const container = document.getElementById('providers-grid-container');
+    if (!container) return;
+
+    try {
+        const res = await fetch('/api/providers');
+        const data = await res.json();
+        state.providers = data.providers || {};
+
+        container.innerHTML = '';
+        Object.entries(state.providers).forEach(([pid, p]) => {
+            const isConfigured = p.configured;
+            const card = document.createElement('div');
+            card.className = 'provider-card glass-panel';
             card.innerHTML = `
                 <div class="provider-card-header">
                     <div class="provider-info">
                         <h4>${p.name}</h4>
-                        <span class="provider-cat">${p.category}</span>
+                        <span class="provider-cat">${p.category.toUpperCase()} • ${p.models ? p.models.length : 0} Models</span>
                     </div>
-                    <span class="provider-status-badge ${badgeClass}">
-                        <i class="fa-solid ${icon}"></i> ${badgeText}
+                    <span class="provider-status-badge ${isConfigured ? 'status-active' : 'status-missing'}">
+                        <i class="fa-solid ${isConfigured ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i>
+                        ${isConfigured ? 'Active' : 'Missing Key'}
                     </span>
                 </div>
                 <div class="provider-meta-notes">
-                    <strong>${p.free_tier ? "🆓 Free Tier:" : "💳 Tier:"}</strong> ${p.free_note || "Standard API Access"}
+                    ${p.notes || 'Frontier AI ecosystem integrated with streaming support.'}
                 </div>
                 <div class="provider-actions">
-                    <button class="ping-btn" data-pid="${p.id}">
-                        <i class="fa-solid fa-satellite-dish"></i> Test Ping
+                    <button class="ping-btn" onclick="pingProvider('${pid}')" id="ping-${pid}">
+                        <i class="fa-solid fa-satellite-dish"></i> Ping Latency
                     </button>
-                    ${!isLocal ? `
-                    <button class="config-btn" data-pid="${p.id}">
-                        <i class="fa-solid fa-gear"></i> ${p.has_key ? "Update Key" : "Set API Key"}
+                    <button class="config-btn" onclick="openKeyModal('${pid}', '${p.name}', '${p.env_key}', '${p.docs_url}')">
+                        <i class="fa-solid fa-gear"></i> ${isConfigured ? 'Update Key' : 'Configure Key'}
                     </button>
-                    ` : `
-                    <span style="font-size:0.75rem; color:var(--text-muted);">http://localhost:11434</span>
-                    `}
                 </div>
             `;
             container.appendChild(card);
         });
 
-        // Attach event handlers
-        container.querySelectorAll(".ping-btn").forEach(btn => {
-            btn.addEventListener("click", () => pingProvider(btn.dataset.pid, btn));
-        });
-
-        container.querySelectorAll(".config-btn").forEach(btn => {
-            btn.addEventListener("click", () => openKeyModal(btn.dataset.pid));
-        });
-    }
-
-    function populateModelDropdowns() {
-        // Chat dropdown
-        const freeGroup = document.getElementById("optgroup-free");
-        const frontierGroup = document.getElementById("optgroup-frontier");
-        const fastGroup = document.getElementById("optgroup-fast");
-        const codeGroup = document.getElementById("optgroup-code");
-        const searchGroup = document.getElementById("optgroup-search");
-        const localGroup = document.getElementById("optgroup-local");
-
-        if (freeGroup) freeGroup.innerHTML = "";
-        if (frontierGroup) frontierGroup.innerHTML = "";
-        if (fastGroup) fastGroup.innerHTML = "";
-        if (codeGroup) codeGroup.innerHTML = "";
-        if (searchGroup) searchGroup.innerHTML = "";
-        if (localGroup) localGroup.innerHTML = "";
-
-        Object.values(state.providers).forEach(p => {
-            p.models.forEach(m => {
-                const opt = document.createElement("option");
-                opt.value = `${p.id}/${m.id}`;
-                opt.textContent = `${p.name} - ${m.name} (${m.context})`;
-
-                if (p.id === "ollama" && localGroup) {
-                    localGroup.appendChild(opt);
-                } else if (m.free && freeGroup) {
-                    freeGroup.appendChild(opt);
-                } else if (m.tags.includes("coding") && codeGroup) {
-                    codeGroup.appendChild(opt);
-                } else if (m.tags.includes("speed") && fastGroup) {
-                    fastGroup.appendChild(opt);
-                } else if (m.tags.includes("search") && searchGroup) {
-                    searchGroup.appendChild(opt);
-                } else if (frontierGroup) {
-                    frontierGroup.appendChild(opt);
-                }
-            });
-        });
-    }
-
-    // ------------------------------------------------------------------------
-    // 4. Provider Ping & Testing
-    // ------------------------------------------------------------------------
-    async function pingProvider(pid, btnEl) {
-        const origText = btnEl.innerHTML;
-        btnEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Pinging...`;
-        try {
-            const res = await fetch(`/api/ping/${pid}`, { method: "POST" });
-            const data = await res.json();
-            if (data.status === "active") {
-                btnEl.innerHTML = `<i class="fa-solid fa-check" style="color:var(--accent-emerald);"></i> ${data.latency_ms}ms`;
-                showToast(`✓ ${pid.toUpperCase()} connected successfully (${data.latency_ms}ms)`);
-            } else if (data.status === "missing_key") {
-                btnEl.innerHTML = `<i class="fa-solid fa-key" style="color:var(--accent-amber);"></i> Key Missing`;
-                showToast(`⚠ ${pid.toUpperCase()}: API key not configured in .env`);
-            } else {
-                btnEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-rose);"></i> Error`;
-                showToast(`❌ ${pid.toUpperCase()}: ${data.message || 'Error'}`);
-            }
-        } catch (err) {
-            btnEl.innerHTML = `<i class="fa-solid fa-xmark"></i> Failed`;
-            showToast(`Ping failed: ${err.message}`);
-        }
-        setTimeout(() => { btnEl.innerHTML = origText; }, 4000);
-    }
-
-    document.getElementById("ping-all-btn")?.addEventListener("click", () => {
-        showToast("Pinging all 20 AI providers in parallel...");
-        document.querySelectorAll(".ping-btn").forEach(btn => btn.click());
-    });
-
-    // ------------------------------------------------------------------------
-    // 5. Key Configuration Modal
-    // ------------------------------------------------------------------------
-    function openKeyModal(pid) {
-        const p = state.providers[pid];
-        if (!p) return;
-        currentEditingEnvVar = p.env_var;
-        modalProviderName.textContent = `Configure ${p.name}`;
-        modalProviderDesc.textContent = `${p.category}. ${p.free_note || ''}`;
-        modalEnvLabel.textContent = `Environment Variable: ${p.env_var}`;
-        modalKeyInput.value = "";
-        modalKeyLink.href = p.free_key_url || "https://ai.google.dev/";
-        modalKeyLink.textContent = p.free_tier ? "Get Free API Key" : "Open Provider API Console";
-        keyModal.classList.remove("hidden");
-        modalKeyInput.focus();
-    }
-
-    modalCloseBtn?.addEventListener("click", () => keyModal.classList.add("hidden"));
-    modalCancelBtn?.addEventListener("click", () => keyModal.classList.add("hidden"));
-
-    modalSaveBtn?.addEventListener("click", async () => {
-        const val = modalKeyInput.value.trim();
-        if (!val || !currentEditingEnvVar) {
-            showToast("Please enter a valid API key.");
-            return;
-        }
-
-        try {
-            const res = await fetch("/api/keys", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ env_var: currentEditingEnvVar, value: val })
-            });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`✓ Saved ${currentEditingEnvVar} to .env!`);
-                keyModal.classList.add("hidden");
-                loadProviders();
-            } else {
-                showToast(`Failed: ${data.detail || 'Error'}`);
-            }
-        } catch (err) {
-            showToast(`Error saving key: ${err.message}`);
-        }
-    });
-
-    // ------------------------------------------------------------------------
-    // 6. Profile & Model Controls
-    // ------------------------------------------------------------------------
-    profileSelector?.querySelectorAll(".profile-chip").forEach(chip => {
-        chip.addEventListener("click", () => {
-            profileSelector.querySelectorAll(".profile-chip").forEach(c => c.classList.remove("active"));
-            chip.classList.add("active");
-            state.selectedProfile = chip.dataset.profile;
-            directModelSelect.value = "auto";
-            state.selectedModel = "auto";
-            activeRouteDisplay.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Mode: ${chip.querySelector(".chip-title").textContent}`;
-        });
-    });
-
-    directModelSelect?.addEventListener("change", (e) => {
-        state.selectedModel = e.target.value;
-        if (state.selectedModel !== "auto") {
-            profileSelector.querySelectorAll(".profile-chip").forEach(c => c.classList.remove("active"));
-            activeRouteDisplay.innerHTML = `<i class="fa-solid fa-microchip"></i> Override: ${state.selectedModel}`;
-        } else {
-            const autoChip = profileSelector.querySelector('[data-profile="auto"]');
-            autoChip?.classList.add("active");
-            state.selectedProfile = "auto";
-            activeRouteDisplay.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Mode: Auto Intent`;
-        }
-    });
-
-    tempSlider?.addEventListener("input", (e) => {
-        state.temperature = parseFloat(e.target.value);
-        tempValEl.textContent = state.temperature.toFixed(2);
-    });
-
-    clearChatBtn?.addEventListener("click", () => {
-        state.messages = [];
-        chatMessagesEl.innerHTML = `
-            <div class="welcome-card">
-                <div class="welcome-icon"><i class="fa-solid fa-atom"></i></div>
-                <h2>OmniModel Gateway Online</h2>
-                <p>History cleared. Ready for your next multi-model query or code prompt.</p>
-            </div>
-        `;
-        routingBanner.classList.add("hidden");
-    });
-
-    // Quick Prompts
-    document.addEventListener("click", (e) => {
-        const qp = e.target.closest(".quick-prompt");
-        if (qp) {
-            chatInputEl.value = qp.dataset.prompt;
-            handleSendMessage();
-        }
-    });
-
-    // ------------------------------------------------------------------------
-    // 7. Interactive Streaming Chat Manager
-    // ------------------------------------------------------------------------
-    chatInputEl?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    });
-
-    sendBtnEl?.addEventListener("click", handleSendMessage);
-
-    async function handleSendMessage() {
-        const text = chatInputEl.value.trim();
-        if (!text || state.isStreaming) return;
-
-        // Remove welcome card if present
-        const welcomeCard = chatMessagesEl.querySelector(".welcome-card");
-        if (welcomeCard) welcomeCard.remove();
-
-        // Add user message
-        state.messages.push({ role: "user", content: text });
-        appendMessageBubble("user", text);
-        chatInputEl.value = "";
-        state.isStreaming = true;
-        sendBtnEl.disabled = true;
-
-        // Prepare AI streaming bubble
-        const aiBubbleEl = appendMessageBubble("ai", "", "OmniModel Router", "Connecting...");
-        const contentEl = aiBubbleEl.querySelector(".msg-body");
-        const headerTagEl = aiBubbleEl.querySelector(".msg-provider-tag");
-        const latencyTagEl = aiBubbleEl.querySelector(".msg-latency-tag");
-
-        let fullAiText = "";
-        const startTime = performance.now();
-
-        try {
-            const payload = {
-                messages: state.messages,
-                provider: state.selectedModel !== "auto" ? state.selectedModel.split("/")[0] : null,
-                model: state.selectedModel !== "auto" ? state.selectedModel.split("/")[1] : null,
-                profile: state.selectedModel === "auto" ? (state.selectedProfile === "auto" ? null : state.selectedProfile) : null,
-                temperature: state.temperature
+        // Batch Ping Button
+        const pingAllBtn = document.getElementById('ping-all-btn');
+        if (pingAllBtn) {
+            pingAllBtn.onclick = () => {
+                sfx.playTransmit();
+                Object.keys(state.providers).forEach(pid => pingProvider(pid));
             };
-
-            const response = await fetch("/api/chat/stream", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = "";
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop(); // Keep partial line in buffer
-
-                for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed || !trimmed.startsWith("data: ")) continue;
-                    const jsonStr = trimmed.slice(6);
-                    if (jsonStr === "[DONE]") break;
-
-                    try {
-                        const data = JSON.parse(jsonStr);
-                        
-                        // Handle routing decision metadata event
-                        if (data.meta_event === "routing_decision") {
-                            routingBanner.classList.remove("hidden");
-                            routeBannerTitle.textContent = `Auto-Routed to: ${data.profile_name}`;
-                            routeBannerDesc.textContent = data.rationale;
-                            routeBannerTags.innerHTML = data.chain.map(c => `<span class="banner-tag-item">${c.provider_name}</span>`).join(" ");
-                        }
-
-                        // Handle provider fallback alert
-                        if (data.meta_event === "provider_fallback") {
-                            showToast(`⚠ Fallback: ${data.failed_provider} unavailable. Switching to next provider...`);
-                        }
-
-                        // Handle delta chunk
-                        if (data.delta) {
-                            fullAiText += data.delta;
-                            contentEl.innerHTML = marked.parse(fullAiText);
-                            contentEl.querySelectorAll("pre code").forEach(el => hljs.highlightElement(el));
-                            chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-                        }
-
-                        if (data.provider) {
-                            headerTagEl.textContent = `${data.provider.toUpperCase()} / ${data.model || ''}`;
-                        }
-
-                        if (data.latency_ms) {
-                            latencyTagEl.textContent = `Latency: ${data.latency_ms}ms`;
-                        }
-
-                    } catch (parseErr) {
-                        console.warn("SSE Parse Warning:", parseErr);
-                    }
-                }
-            }
-
-            // Save completed assistant message to history
-            state.messages.push({ role: "assistant", content: fullAiText });
-            const totalTime = Math.round(performance.now() - startTime);
-            latencyTagEl.textContent = `Completed in ${totalTime}ms`;
-
-        } catch (err) {
-            contentEl.innerHTML = `<span style="color:var(--accent-rose)">Error connecting to OmniModel Gateway: ${err.message}</span>`;
-        } finally {
-            state.isStreaming = false;
-            sendBtnEl.disabled = false;
-        }
-    }
-
-    function appendMessageBubble(role, text, providerTag = "You", latencyTag = "") {
-        const row = document.createElement("div");
-        row.className = `message-row ${role}`;
-        
-        const avatarIcon = role === "user" ? "fa-user" : "fa-brain";
-        row.innerHTML = `
-            <div class="msg-avatar ${role}">
-                <i class="fa-solid ${avatarIcon}"></i>
-            </div>
-            <div class="msg-bubble">
-                <div class="msg-header">
-                    <span class="msg-provider-tag">${providerTag}</span>
-                    <span class="msg-latency-tag">${latencyTag}</span>
-                </div>
-                <div class="msg-body">${role === "user" ? text : '<span class="pulsing-text">Thinking...</span>'}</div>
-            </div>
-        `;
-
-        chatMessagesEl.appendChild(row);
-        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-        return row;
-    }
-
-    // ------------------------------------------------------------------------
-    // 8. Model Arena (Multi-Duel Parallel Broadcast)
-    // ------------------------------------------------------------------------
-    arenaBroadcastBtn?.addEventListener("click", handleArenaBroadcast);
-    arenaPromptInput?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") handleArenaBroadcast();
-    });
-
-    async function handleArenaBroadcast() {
-        const prompt = arenaPromptInput.value.trim();
-        if (!prompt) return;
-
-        const selectedModels = [
-            document.getElementById("arena-model-0").value,
-            document.getElementById("arena-model-1").value,
-            document.getElementById("arena-model-2").value,
-            document.getElementById("arena-model-3").value
-        ];
-
-        // Reset cards
-        for (let i = 0; i < 4; i++) {
-            const [prov, mod] = selectedModels[i].split("/");
-            document.getElementById(`arena-name-${i}`).textContent = `${prov.toUpperCase()} (${mod})`;
-            document.getElementById(`arena-metric-${i}`).textContent = "Streaming...";
-            document.getElementById(`arena-body-${i}`).innerHTML = `<span style="color:var(--accent-cyan);"><i class="fa-solid fa-spinner fa-spin"></i> Generating...</span>`;
         }
 
-        const modelPayloads = selectedModels.map(sm => {
-            const [prov, mod] = sm.split("/");
-            return { provider: prov, model: mod };
-        });
+    } catch(e) {
+        container.innerHTML = `<div style="color:var(--accent-rose)">Failed to load providers: ${e.message}</div>`;
+    }
+}
 
-        const responsesText = ["", "", "", ""];
-        const startTimes = [performance.now(), performance.now(), performance.now(), performance.now()];
+window.pingProvider = async function(pid) {
+    const btn = document.getElementById(`ping-${pid}`);
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Pinging...';
 
+    const start = performance.now();
+    try {
+        const res = await fetch(`/api/providers`);
+        const lat = Math.round(performance.now() - start);
+        if (btn) {
+            btn.innerHTML = `<span style="color:var(--accent-emerald)"><i class="fa-solid fa-check"></i> ${lat} ms</span>`;
+        }
+    } catch(e) {
+        if (btn) btn.innerHTML = `<span style="color:var(--accent-rose)">Offline</span>`;
+    }
+};
+
+// Modal for Keys
+window.openKeyModal = function(pid, name, envKey, docsUrl) {
+    const modal = document.getElementById('key-modal');
+    const nameEl = document.getElementById('modal-provider-name');
+    const descEl = document.getElementById('modal-provider-desc');
+    const envLabel = document.getElementById('modal-env-label');
+    const linkEl = document.getElementById('modal-key-link');
+    const keyInput = document.getElementById('modal-key-input');
+
+    if (!modal) return;
+
+    nameEl.innerText = `Configure ${name}`;
+    descEl.innerText = `Enter the API key for ${name}. It will be saved securely to your local .env vault.`;
+    envLabel.innerText = `Environment Variable: ${envKey}`;
+    linkEl.href = docsUrl || '#';
+    keyInput.value = '';
+
+    modal.classList.remove('hidden');
+    sfx.playClick();
+
+    document.getElementById('modal-save-btn').onclick = async () => {
+        const val = keyInput.value.trim();
+        if (!val) return;
         try {
-            const res = await fetch("/api/arena/stream", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    models: modelPayloads,
-                    messages: [{ role: "user", content: prompt }]
-                })
+            await fetch('/api/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ env_key: envKey, api_key: val })
             });
-
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = "";
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed || !trimmed.startsWith("data: ")) continue;
-                    const jsonStr = trimmed.slice(6);
-                    if (jsonStr === "[DONE]") break;
-
-                    try {
-                        const item = JSON.parse(jsonStr);
-                        const wid = item.arena_worker_id;
-                        if (wid !== undefined && wid >= 0 && wid < 4) {
-                            if (item.delta) {
-                                responsesText[wid] += item.delta;
-                                const bodyEl = document.getElementById(`arena-body-${wid}`);
-                                bodyEl.innerHTML = marked.parse(responsesText[wid]);
-                                bodyEl.querySelectorAll("pre code").forEach(el => hljs.highlightElement(el));
-                            }
-                            if (item.done) {
-                                const totalMs = Math.round(performance.now() - startTimes[wid]);
-                                const wordCount = responsesText[wid].split(/\s+/).length;
-                                const speed = Math.round((wordCount / (totalMs / 1000)) * 1.3);
-                                document.getElementById(`arena-metric-${wid}`).textContent = `${totalMs}ms (~${speed} tok/s)`;
-                            }
-                        }
-                    } catch (e) {}
-                }
-            }
-        } catch (err) {
-            showToast(`Arena error: ${err.message}`);
+            showToast(`${name} API key updated!`);
+            modal.classList.add('hidden');
+            loadProviders();
+            sfx.playComplete();
+        } catch(e) {
+            showToast(`Failed to save key: ${e.message}`);
         }
-    }
+    };
+};
 
-    // ------------------------------------------------------------------------
-    // 9. Copy Code Snippets
-    // ------------------------------------------------------------------------
-    document.querySelectorAll(".copy-code-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const targetId = btn.dataset.target;
-            const codeEl = document.getElementById(targetId);
-            if (codeEl) {
-                navigator.clipboard.writeText(codeEl.innerText);
-                btn.innerHTML = `<i class="fa-solid fa-check"></i> Copied!`;
-                setTimeout(() => {
-                    btn.innerHTML = `<i class="fa-regular fa-copy"></i> Copy`;
-                }, 2000);
+document.getElementById('modal-close-btn')?.addEventListener('click', () => {
+    document.getElementById('key-modal')?.classList.add('hidden');
+});
+document.getElementById('modal-cancel-btn')?.addEventListener('click', () => {
+    document.getElementById('key-modal')?.classList.add('hidden');
+});
+
+// ==========================================
+// 9. USER ANALYTICS & TELEMETRY
+// ==========================================
+async function loadAnalytics() {
+    try {
+        const res = await fetch('/api/analytics');
+        const data = await res.json();
+
+        // Update KPIs
+        const kpiUsers = document.getElementById('kpi-users');
+        const kpiRequests = document.getElementById('kpi-requests');
+        const kpiTokens = document.getElementById('kpi-tokens');
+        const kpiLatency = document.getElementById('kpi-latency');
+
+        if (kpiUsers) kpiUsers.innerText = data.total_users || 0;
+        if (kpiRequests) kpiRequests.innerText = data.total_requests || 0;
+        if (kpiTokens) kpiTokens.innerText = (data.total_tokens || 0).toLocaleString();
+        if (kpiLatency) kpiLatency.innerText = `${Math.round(data.average_latency_ms || 0)} ms`;
+
+        // Populate Table
+        const tbody = document.getElementById('analytics-tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+            const logs = data.recent_logs || [];
+            if (logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:20px;">No requests recorded yet. Make a query to see live telemetry!</td></tr>`;
+            } else {
+                logs.forEach(log => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${escapeHtml(log.timestamp || '')}</td>
+                        <td><code>${escapeHtml(log.client_ip || '127.0.0.1')}</code></td>
+                        <td>${escapeHtml(log.platform || 'Antigravity / Web')}</td>
+                        <td><strong>${escapeHtml(log.provider || '')}</strong> / ${escapeHtml(log.model || '')}</td>
+                        <td>${Math.round(log.latency_ms || 0)} ms</td>
+                        <td><span style="color:var(--accent-emerald); font-weight:700;">SUCCESS</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
             }
+        }
+    } catch(e) {}
+}
+
+document.getElementById('refresh-analytics-btn')?.addEventListener('click', () => {
+    loadAnalytics();
+    sfx.playClick();
+    showToast('Analytics Refreshed');
+});
+
+// ==========================================
+// 10. NEURAL GRAPH SIMULATION (Tab 3)
+// ==========================================
+function initGraph() {
+    const simBtn = document.getElementById('simulate-graph-btn');
+    if (!simBtn) return;
+
+    simBtn.addEventListener('click', () => {
+        sfx.playTransmit();
+        const links = document.querySelectorAll('.flow-line');
+        links.forEach(l => {
+            l.classList.add('active');
+            setTimeout(() => l.classList.remove('active'), 2500);
         });
+        showToast('Simulating Cognitive Routing Signal Flow across all Tiers');
     });
+}
 
-    // ------------------------------------------------------------------------
-    // 10. User Analytics & Telemetry Loader
-    // ------------------------------------------------------------------------
-    async function loadAnalytics() {
-        try {
-            const res = await fetch("/api/analytics");
-            const data = await res.json();
-            if (data.success && data.analytics) {
-                const a = data.analytics;
-                document.getElementById("kpi-users").textContent = a.unique_users || 0;
-                document.getElementById("kpi-requests").textContent = a.total_requests || 0;
-                document.getElementById("kpi-tokens").textContent = a.total_tokens ? a.total_tokens.toLocaleString() : 0;
-                document.getElementById("kpi-latency").textContent = `${a.avg_latency_ms || 0} ms`;
+// ==========================================
+// 11. TOAST & UTILITIES
+// ==========================================
+function showToast(msg) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.innerText = msg;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3000);
+}
 
-                const tbody = document.getElementById("analytics-tbody");
-                if (a.recent_activity && a.recent_activity.length > 0) {
-                    tbody.innerHTML = a.recent_activity.map(r => `
-                        <tr>
-                            <td><span style="font-family:var(--font-mono); font-size:0.75rem;">${r.timestamp}</span></td>
-                            <td><span style="font-family:var(--font-mono); color:var(--accent-cyan);">${r.client_ip}</span></td>
-                            <td><span style="font-size:0.75rem;">${r.platform}</span></td>
-                            <td><strong>${r.provider.toUpperCase()}</strong> / ${r.model}</td>
-                            <td><span style="font-family:var(--font-mono);">${r.latency_ms}ms</span></td>
-                            <td><span class="badge ${r.status === 'success' ? 'badge-c' : 'badge-d'}">${r.status}</span></td>
-                        </tr>
-                    `).join("");
-                } else {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:20px;">No requests recorded yet. Make a query to see live telemetry!</td></tr>`;
-                }
-            }
-        } catch (err) {
-            console.error("Failed to load analytics:", err);
+function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Copy Code Snippets in Tab 7
+document.querySelectorAll('.copy-code-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const targetId = btn.dataset.target;
+        const codeEl = document.getElementById(targetId);
+        if (codeEl) {
+            navigator.clipboard.writeText(codeEl.innerText);
+            showToast('Code snippet copied to clipboard!');
+            sfx.playClick();
         }
-    }
-
-    document.getElementById("refresh-analytics-btn")?.addEventListener("click", () => {
-        showToast("Refreshing user activity logs...");
-        loadAnalytics();
     });
+});
 
-    document.getElementById("clear-analytics-btn")?.addEventListener("click", async () => {
-        await fetch("/api/analytics/clear", { method: "POST" });
-        showToast("Analytics history cleared.");
-        loadAnalytics();
-    });
-
-    // Load analytics when switching to analytics tab
-    document.querySelector('[data-tab="analytics"]')?.addEventListener("click", loadAnalytics);
-
-    // Initial load
+// ==========================================
+// 12. BOOTSTRAP APPLICATION
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    initNeuralCanvas();
+    initNavigation();
+    initChat();
+    initArena();
+    initGraph();
     loadProviders();
     loadAnalytics();
+
+    // Auto-refresh analytics every 10s
+    setInterval(loadAnalytics, 10000);
 });
