@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GENESIS AI 5.0 // Universal Cognitive Neural Interface</title>
-    <meta name="description" content="GENESIS AI 5.0 - Autonomous Frontier Multi-Model Neural Gateway, 4-Way Model Arena, Interactive Intent Router, and OpenAI-Compatible Proxy.">
+    <meta name="description" content="GENESIS AI 5.0 - ChatGPT-Style Autonomous Frontier Multi-Model Gateway, 4-Way Arena, and Free Tier Hub.">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,6 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <!-- Cinematic GUI Stylesheet -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -29,76 +28,177 @@
         <canvas id="neural-canvas"></canvas>
     </div>
 
-    <div class="app-container">
-        <!-- Top Master HUD & OS Navigation Bar -->
-        <header class="top-nav glass-panel">
-            <div class="nav-brand">
-                <div class="brand-logo-container">
-                    <img src="logo.png" alt="GENESIS AI 5.0 Logo" class="brand-logo-img">
-                    <span class="logo-pulse-ring"></span>
-                </div>
-                <div class="brand-text">
-                    <div class="brand-title-wrap">
-                        <span class="brand-title">GENESIS AI</span>
-                        <span class="brand-version-pill">5.0 COGNITIVE</span>
+    <!-- Master App Layout -->
+    <div class="app-layout">
+        
+        <!-- ChatGPT Collapsible Left Sidebar -->
+        <aside class="chatgpt-sidebar" id="app-sidebar">
+            <div class="sidebar-top">
+                <div class="sidebar-brand">
+                    <img src="logo.png" alt="GENESIS AI 5.0" class="sidebar-logo">
+                    <div class="sidebar-brand-text">
+                        <span class="brand-name">GENESIS AI</span>
+                        <span class="brand-badge">5.0</span>
                     </div>
-                    <span class="brand-subtitle">Universal Multi-Model Operating System • 2026</span>
+                </div>
+                <!-- New Chat Button -->
+                <button class="new-chat-btn" id="new-chat-btn">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New chat</span>
+                    <span class="kbd-shortcut">Ctrl+K</span>
+                </button>
+            </div>
+
+            <!-- Workspace Navigation Strip -->
+            <div class="sidebar-nav-section">
+                <span class="nav-section-title">WORKSPACES</span>
+                <nav class="sidebar-nav-list">
+                    <button class="side-nav-item active" data-tab="chat">
+                        <i class="fa-solid fa-message"></i>
+                        <span>ChatGPT Chat</span>
+                    </button>
+                    <button class="side-nav-item" data-tab="arena">
+                        <i class="fa-solid fa-swords"></i>
+                        <span>4-Way Arena</span>
+                    </button>
+                    <button class="side-nav-item" data-tab="graph">
+                        <i class="fa-solid fa-diagram-project"></i>
+                        <span>Neural Routing Map</span>
+                    </button>
+                    <button class="side-nav-item" data-tab="providers">
+                        <i class="fa-solid fa-network-wired"></i>
+                        <span>20 Providers Matrix</span>
+                    </button>
+                    <button class="side-nav-item" data-tab="freehub">
+                        <i class="fa-solid fa-gift"></i>
+                        <span>100% Free AI Hub</span>
+                    </button>
+                    <button class="side-nav-item" data-tab="analytics">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span>User Analytics</span>
+                    </button>
+                    <button class="side-nav-item" data-tab="proxy">
+                        <i class="fa-solid fa-terminal"></i>
+                        <span>API Proxy & SDK</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Chat History Accordion -->
+            <div class="sidebar-history-section">
+                <span class="nav-section-title">RECENT CHATS</span>
+                <div class="history-list" id="chat-history-list">
+                    <!-- Populated dynamically from localStorage -->
                 </div>
             </div>
 
-            <!-- Central Nav Workspace Tabs -->
-            <nav class="nav-tabs">
-                <button class="tab-btn active" data-tab="chat">
-                    <i class="fa-solid fa-brain-circuit"></i>
-                    <span>Cognitive Chat</span>
-                </button>
-                <button class="tab-btn" data-tab="arena">
-                    <i class="fa-solid fa-swords"></i>
-                    <span>Model Arena</span>
-                </button>
-                <button class="tab-btn" data-tab="graph">
-                    <i class="fa-solid fa-diagram-project"></i>
-                    <span>Neural Graph</span>
-                </button>
-                <button class="tab-btn" data-tab="providers">
-                    <i class="fa-solid fa-network-wired"></i>
-                    <span>Providers (20)</span>
-                </button>
-                <button class="tab-btn" data-tab="freehub">
-                    <i class="fa-solid fa-gift"></i>
-                    <span>Free AI Hub</span>
-                </button>
-                <button class="tab-btn" data-tab="analytics">
-                    <i class="fa-solid fa-chart-pie"></i>
-                    <span>User Analytics</span>
-                </button>
-                <button class="tab-btn" data-tab="proxy">
-                    <i class="fa-solid fa-terminal"></i>
-                    <span>SDK & Proxy</span>
-                </button>
-            </nav>
+            <!-- Sidebar User Profile Footer -->
+            <div class="sidebar-footer">
+                <div class="user-profile-card" id="user-profile-btn">
+                    <div class="user-avatar">
+                        <i class="fa-solid fa-user-astronaut"></i>
+                    </div>
+                    <div class="user-info">
+                        <span class="user-name">Ishit Jain</span>
+                        <span class="user-plan">GENESIS 5.0 Unlimited</span>
+                    </div>
+                    <button class="settings-trigger-btn" id="open-settings-btn" title="Settings & Keys">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
 
-            <!-- Right Status HUD & Controls -->
-            <div class="nav-status">
-                <!-- Live Token Speed Gauge -->
-                <div class="hud-stat-badge" title="Real-time Token Generation Speed">
-                    <i class="fa-solid fa-gauge-high hud-icon"></i>
-                    <span id="hud-tok-speed">0 tok/s</span>
+        <!-- Main Content Viewport -->
+        <main class="app-main-viewport">
+            
+            <!-- ChatGPT Top Header Bar -->
+            <header class="chatgpt-header">
+                <div class="header-left">
+                    <!-- Sidebar Toggle Button -->
+                    <button class="header-icon-btn" id="sidebar-toggle-btn" title="Toggle Sidebar">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+
+                    <!-- ChatGPT Model Selector Dropdown -->
+                    <div class="model-selector-container">
+                        <button class="model-selector-btn" id="model-dropdown-trigger">
+                            <span class="model-name-text" id="header-model-label">GENESIS AI 5.0</span>
+                            <span class="model-sub-badge" id="header-model-badge">Auto</span>
+                            <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
+                        </button>
+
+                        <!-- Model Dropdown Menu -->
+                        <div class="model-dropdown-menu glass-panel hidden" id="model-dropdown-menu">
+                            <div class="dropdown-header">Select Cognitive Model</div>
+                            
+                            <div class="model-option active" data-model="auto" data-profile="auto">
+                                <div class="model-opt-icon icon-cyan"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                                <div class="model-opt-info">
+                                    <div class="model-opt-title">GENESIS 5.0 Auto <span class="badge-mini">Default</span></div>
+                                    <div class="model-opt-desc">Auto-classifies prompt & routes to fastest/smartest provider</div>
+                                </div>
+                            </div>
+
+                            <div class="model-option" data-model="genesis-5.0-reasoning" data-profile="reasoning">
+                                <div class="model-opt-icon icon-purple"><i class="fa-solid fa-brain"></i></div>
+                                <div class="model-opt-info">
+                                    <div class="model-opt-title">GENESIS 5.0 Reasoning <span class="badge-mini badge-reason">Thinking</span></div>
+                                    <div class="model-opt-desc">DeepSeek R1, OpenAI o3-mini, Gemini Flash Thinking</div>
+                                </div>
+                            </div>
+
+                            <div class="model-option" data-model="genesis-5.0-speed" data-profile="speed">
+                                <div class="model-opt-icon icon-amber"><i class="fa-solid fa-bolt"></i></div>
+                                <div class="model-opt-info">
+                                    <div class="model-opt-title">GENESIS 5.0 Ultra-Speed <span class="badge-mini badge-fast">&lt;100ms</span></div>
+                                    <div class="model-opt-desc">Groq LPU (500+ tok/s), Cerebras Wafer-Scale</div>
+                                </div>
+                            </div>
+
+                            <div class="model-option" data-model="genesis-5.0-coder" data-profile="coding">
+                                <div class="model-opt-icon icon-emerald"><i class="fa-solid fa-code"></i></div>
+                                <div class="model-opt-info">
+                                    <div class="model-opt-title">GENESIS 5.0 Coder <span class="badge-mini badge-code">Architect</span></div>
+                                    <div class="model-opt-desc">Claude 3.7 Sonnet, Codestral, Gemini Pro</div>
+                                </div>
+                            </div>
+
+                            <div class="model-option" data-model="genesis-5.0-free" data-profile="free_tier">
+                                <div class="model-opt-icon icon-green"><i class="fa-solid fa-gift"></i></div>
+                                <div class="model-opt-info">
+                                    <div class="model-opt-title">GENESIS 5.0 100% Free <span class="badge-mini badge-free">Zero Cost</span></div>
+                                    <div class="model-opt-desc">OpenRouter Free, Groq Free Tier, Google AI Studio</div>
+                                </div>
+                            </div>
+
+                            <div class="model-option" data-model="genesis-5.0-search" data-profile="search">
+                                <div class="model-opt-icon icon-pink"><i class="fa-solid fa-globe"></i></div>
+                                <div class="model-opt-info">
+                                    <div class="model-opt-title">GENESIS 5.0 Web Search <span class="badge-mini badge-search">Live</span></div>
+                                    <div class="model-opt-desc">Perplexity Sonar & Citations, Real-time Web</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Active Providers Indicator -->
-                <div class="status-indicator" title="Connected AI Providers">
-                    <span class="status-dot pulsing"></span>
-                    <span class="status-text" id="active-providers-count">20 Providers Ready</span>
-                </div>
+                <!-- Header Right Status & Controls -->
+                <div class="header-right">
+                    <!-- Live Tok/s Speed Badge -->
+                    <div class="header-stat-pill" title="Live Generation Velocity">
+                        <i class="fa-solid fa-gauge-high"></i>
+                        <span id="hud-tok-speed">0 tok/s</span>
+                    </div>
 
-                <!-- Theme & Audio Controls -->
-                <div class="hud-controls">
-                    <button id="sfx-toggle-btn" class="hud-btn active" title="Toggle UI Sound Effects">
+                    <!-- SFX Toggle -->
+                    <button class="header-icon-btn active" id="sfx-toggle-btn" title="Toggle Sound FX">
                         <i class="fa-solid fa-volume-high"></i>
                     </button>
+
+                    <!-- Theme Matrix Switcher -->
                     <div class="theme-dropdown-wrap">
-                        <button id="theme-btn" class="hud-btn" title="Switch Theme Matrix">
+                        <button class="header-icon-btn" id="theme-btn" title="Change Theme Matrix">
                             <i class="fa-solid fa-palette"></i>
                         </button>
                         <div class="theme-menu glass-panel hidden" id="theme-menu">
@@ -109,209 +209,116 @@
                             <button class="theme-opt" data-set-theme="glacier"><i class="fa-solid fa-circle" style="color:#38bdf8;"></i> Glacier Frost</button>
                         </div>
                     </div>
-                    <button id="fullscreen-btn" class="hud-btn" title="Toggle Fullscreen">
+
+                    <!-- Fullscreen Toggle -->
+                    <button class="header-icon-btn" id="fullscreen-btn" title="Toggle Fullscreen">
                         <i class="fa-solid fa-expand"></i>
                     </button>
                 </div>
-            </div>
-        </header>
+            </header>
 
-        <!-- Main Workspace Viewport -->
-        <main class="main-content">
+            <!-- WORKSPACE 1: CHATGPT CHAT STREAM -->
+            <section id="tab-chat" class="workspace-pane active">
+                <div class="chatgpt-container">
+                    
+                    <!-- Chat Messages Stream Feed -->
+                    <div class="chat-feed" id="chat-messages">
+                        
+                        <!-- ChatGPT Welcome Center Hero -->
+                        <div class="chatgpt-welcome" id="chatgpt-welcome-screen">
+                            <div class="welcome-hero-logo">
+                                <img src="logo.png" alt="GENESIS AI 5.0" class="hero-logo-img">
+                                <div class="hero-logo-halo"></div>
+                            </div>
+                            <h1>What can I help with today?</h1>
+                            <p class="welcome-tagline">GENESIS AI 5.0 connects 20+ frontier models with instant auto-routing, deep reasoning, and zero-cost fallbacks.</p>
 
-            <!-- TAB 1: COGNITIVE CHAT & INTELLIGENT AGENT -->
-            <section id="tab-chat" class="tab-pane active">
-                <div class="chat-layout">
-                    <!-- Left Strategy & Control Deck -->
-                    <aside class="chat-sidebar glass-panel">
-                        <div class="sidebar-header">
-                            <h3><i class="fa-solid fa-microchip"></i> Routing Engine</h3>
-                            <span class="active-node-badge">ALFA-CORE</span>
-                        </div>
-
-                        <!-- Routing Profiles -->
-                        <div class="control-group">
-                            <label><i class="fa-solid fa-compass"></i> Routing Strategy Profile</label>
-                            <div class="profile-grid" id="profile-selector">
-                                <button class="profile-chip active" data-profile="auto">
-                                    <div class="chip-top">
-                                        <span class="chip-title">🤖 Auto Intent</span>
-                                        <span class="chip-tag">AI Pick</span>
+                            <div class="chatgpt-prompt-cards">
+                                <button class="prompt-card" data-prompt="Explain quantum key distribution (BB84 protocol) with a complete Python simulation script.">
+                                    <div class="card-icon"><i class="fa-solid fa-atom"></i></div>
+                                    <div class="card-text">
+                                        <strong>Quantum Key Distribution</strong>
+                                        <span>BB84 simulation with Python code</span>
                                     </div>
-                                    <span class="chip-sub">Analyzes prompt complexity & routes</span>
                                 </button>
-                                <button class="profile-chip" data-profile="free_tier">
-                                    <div class="chip-top">
-                                        <span class="chip-title">🆓 100% Free Tier</span>
-                                        <span class="chip-tag tag-free">Zero Cost</span>
+                                <button class="prompt-card" data-prompt="Prove by mathematical induction that for all n >= 1: 1 + 2 + 3 + ... + n = n(n+1)/2. Show full reasoning.">
+                                    <div class="card-icon"><i class="fa-solid fa-brain"></i></div>
+                                    <div class="card-text">
+                                        <strong>Mathematical Induction Proof</strong>
+                                        <span>Deep step-by-step reasoning proof</span>
                                     </div>
-                                    <span class="chip-sub">OpenRouter Free, Groq, Gemini AI Studio</span>
                                 </button>
-                                <button class="profile-chip" data-profile="speed">
-                                    <div class="chip-top">
-                                        <span class="chip-title">⚡ Ultra-Speed</span>
-                                        <span class="chip-tag tag-fast">&lt;100ms</span>
+                                <button class="prompt-card" data-prompt="Compare Transformer attention mechanisms vs Mamba state-space models in 3 ultra-fast bullet points.">
+                                    <div class="card-icon"><i class="fa-solid fa-bolt"></i></div>
+                                    <div class="card-text">
+                                        <strong>Transformer vs Mamba</strong>
+                                        <span>Ultra-speed architectural summary</span>
                                     </div>
-                                    <span class="chip-sub">Groq LPU, Cerebras, SambaNova</span>
                                 </button>
-                                <button class="profile-chip" data-profile="reasoning">
-                                    <div class="chip-top">
-                                        <span class="chip-title">🧠 Deep Reasoning</span>
-                                        <span class="chip-tag tag-deep">CoT Math</span>
+                                <button class="prompt-card" data-prompt="What are the latest frontier AI agent advancements and breakthroughs in 2026?">
+                                    <div class="card-icon"><i class="fa-solid fa-globe"></i></div>
+                                    <div class="card-text">
+                                        <strong>2026 AI Agent Advancements</strong>
+                                        <span>Autonomous multi-agent research</span>
                                     </div>
-                                    <span class="chip-sub">DeepSeek R1, Gemini Thinking, o3-mini</span>
-                                </button>
-                                <button class="profile-chip" data-profile="coding">
-                                    <div class="chip-top">
-                                        <span class="chip-title">💻 Elite Code</span>
-                                        <span class="chip-tag tag-code">Architecture</span>
-                                    </div>
-                                    <span class="chip-sub">Claude 3.7 Sonnet, Codestral, Gemini Pro</span>
-                                </button>
-                                <button class="profile-chip" data-profile="search">
-                                    <div class="chip-top">
-                                        <span class="chip-title">🌐 Live Web Search</span>
-                                        <span class="chip-tag tag-search">Grounded</span>
-                                    </div>
-                                    <span class="chip-sub">Perplexity Sonar, Citations & Research</span>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Manual Model Override Dropdown -->
-                        <div class="control-group">
-                            <label><i class="fa-solid fa-sliders"></i> Model Override</label>
-                            <select id="direct-model-select" class="custom-select">
-                                <option value="auto">⚡ GENESIS AI 5.0 (Auto-Routed)</option>
-                                <optgroup label="🌌 GENESIS Flagship Virtual Models">
-                                    <option value="genesis-ai-5.0">GENESIS AI 5.0 (Universal Auto-Router)</option>
-                                    <option value="genesis-5.0-reasoning">GENESIS 5.0 Deep Reasoning (DeepSeek R1 / o3)</option>
-                                    <option value="genesis-5.0-speed">GENESIS 5.0 Ultra-Speed (&lt;100ms)</option>
-                                    <option value="genesis-5.0-coder">GENESIS 5.0 Elite Coder (Claude 3.7 / Codestral)</option>
-                                    <option value="genesis-5.0-free">GENESIS 5.0 100% Free Tier (Zero-Cost)</option>
-                                    <option value="genesis-5.0-search">GENESIS 5.0 Live Web Search (Perplexity)</option>
-                                </optgroup>
-                                <optgroup label="🆓 100% Free / Open Tier" id="optgroup-free"></optgroup>
-                                <optgroup label="🚀 Frontier & Reasoning" id="optgroup-frontier"></optgroup>
-                                <optgroup label="⚡ Ultra-Fast Inference" id="optgroup-fast"></optgroup>
-                                <optgroup label="💻 Coding Specialists" id="optgroup-code"></optgroup>
-                                <optgroup label="🌐 Search & Retrieval" id="optgroup-search"></optgroup>
-                                <optgroup label="🖥️ Local Offline (Ollama)" id="optgroup-local"></optgroup>
-                            </select>
-                        </div>
+                    </div>
 
-                        <!-- Hyperparameters -->
-                        <div class="control-group">
-                            <div class="slider-header">
-                                <label><i class="fa-solid fa-temperature-half"></i> Temperature</label>
-                                <span id="temp-val" class="slider-badge">0.70</span>
+                    <!-- Floating Voice Listening Waveform -->
+                    <div id="voice-wave-bar" class="voice-wave-container hidden">
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                        <span class="wave-bar"></span>
+                        <span class="wave-label" id="voice-status-text">Listening to your voice...</span>
+                    </div>
+
+                    <!-- Iconic ChatGPT Floating Input Console -->
+                    <div class="chatgpt-input-wrapper">
+                        <div class="chatgpt-input-box glass-panel">
+                            
+                            <!-- Search & Reasoning Quick Toggles inside pill -->
+                            <div class="input-toggles">
+                                <button class="input-pill-btn" id="toggle-search-btn" title="Toggle Live Web Search">
+                                    <i class="fa-solid fa-globe"></i>
+                                    <span>Search</span>
+                                </button>
+                                <button class="input-pill-btn" id="toggle-reason-btn" title="Toggle Deep Reasoning">
+                                    <i class="fa-solid fa-brain"></i>
+                                    <span>Reason</span>
+                                </button>
                             </div>
-                            <input type="range" id="temp-slider" min="0" max="1.5" step="0.05" value="0.7" class="custom-range">
-                        </div>
 
-                        <div class="sidebar-footer">
-                            <button id="clear-chat-btn" class="secondary-btn">
-                                <i class="fa-solid fa-trash-can"></i> Clear Stream
-                            </button>
-                        </div>
-                    </aside>
+                            <!-- Textarea Input -->
+                            <textarea id="chat-input" placeholder="Message GENESIS AI 5.0..." rows="1"></textarea>
 
-                    <!-- Main Chat Stream Window -->
-                    <div class="chat-main glass-panel">
-                        <!-- Dynamic Smart Routing Visualizer Bar -->
-                        <div id="routing-banner" class="routing-banner hidden">
-                            <div class="routing-banner-content">
-                                <div class="banner-pulse-icon">
-                                    <i class="fa-solid fa-route"></i>
-                                </div>
-                                <div class="banner-details">
-                                    <div class="banner-title" id="route-banner-title">GENESIS Router Activated</div>
-                                    <div class="banner-desc" id="route-banner-desc">Analyzing prompt intent and selecting optimal fallback chain...</div>
-                                </div>
-                            </div>
-                            <div class="banner-tags" id="route-banner-tags"></div>
-                        </div>
-
-                        <!-- Chat Messages Viewport -->
-                        <div id="chat-messages" class="chat-messages-container">
-                            <div class="welcome-card glass-panel">
-                                <div class="welcome-logo-wrap">
-                                    <img src="logo.png" alt="GENESIS AI 5.0" class="welcome-logo">
-                                    <div class="welcome-halo"></div>
-                                </div>
-                                <h2>GENESIS AI 5.0 Cognitive Operating System</h2>
-                                <p>Welcome to <strong>GENESIS AI 5.0</strong> — an autonomous multi-model cognitive intelligence engine uniting 20+ frontier AI ecosystems with instant zero-cost auto-routing, resilient waterfall fallbacks, and real-time audio synthesis.</p>
-                                
-                                <div class="quick-prompts-grid">
-                                    <button class="quick-prompt" data-prompt="Explain quantum key distribution with a complete working Python simulation code.">
-                                        <div class="qp-icon"><i class="fa-solid fa-atom"></i></div>
-                                        <div class="qp-text">
-                                            <strong>Quantum Cryptography</strong>
-                                            <span>BB84 simulation in Python</span>
-                                        </div>
-                                    </button>
-                                    <button class="quick-prompt" data-prompt="Solve this step by step: Prove by mathematical induction that 1 + 2 + ... + n = n(n+1)/2.">
-                                        <div class="qp-icon"><i class="fa-solid fa-brain"></i></div>
-                                        <div class="qp-text">
-                                            <strong>Deep CoT Proof</strong>
-                                            <span>Mathematical induction breakdown</span>
-                                        </div>
-                                    </button>
-                                    <button class="quick-prompt" data-prompt="Summarize the architectural differences between Transformer attention and Mamba state space models in 3 ultra-fast bullet points.">
-                                        <div class="qp-icon"><i class="fa-solid fa-bolt"></i></div>
-                                        <div class="qp-text">
-                                            <strong>Ultra-Fast Summary</strong>
-                                            <span>Transformer vs Mamba architectures</span>
-                                        </div>
-                                    </button>
-                                    <button class="quick-prompt" data-prompt="What are the latest frontier AI breakthroughs and agentic workflows in 2026?">
-                                        <div class="qp-icon"><i class="fa-solid fa-globe"></i></div>
-                                        <div class="qp-text">
-                                            <strong>Grounded Intelligence</strong>
-                                            <span>2026 AI Agent advances</span>
-                                        </div>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Interactive Audio Speech Waveform Indicator (Voice Mode) -->
-                        <div id="voice-wave-bar" class="voice-wave-container hidden">
-                            <span class="wave-bar"></span>
-                            <span class="wave-bar"></span>
-                            <span class="wave-bar"></span>
-                            <span class="wave-bar"></span>
-                            <span class="wave-bar"></span>
-                            <span class="wave-label" id="voice-status-text">Listening to your voice...</span>
-                        </div>
-
-                        <!-- Chat Input Console -->
-                        <div class="chat-input-wrapper">
-                            <div class="input-container">
-                                <textarea id="chat-input" placeholder="Type or speak a prompt to GENESIS AI 5.0... (Shift+Enter for new line)" rows="1"></textarea>
-                                
-                                <!-- Voice Dictation Button -->
-                                <button id="voice-input-btn" class="input-action-btn" title="Voice Input (Speech-to-Text)">
+                            <div class="input-actions-right">
+                                <!-- Voice Dictation (Mic) -->
+                                <button class="action-round-btn" id="voice-input-btn" title="Voice Dictation">
                                     <i class="fa-solid fa-microphone"></i>
                                 </button>
 
-                                <!-- Send Prompt Button -->
-                                <button id="send-btn" class="send-btn" title="Execute Cognitive Query">
+                                <!-- Circular Send Button -->
+                                <button class="send-round-btn" id="send-btn" title="Send message">
                                     <i class="fa-solid fa-arrow-up"></i>
                                 </button>
                             </div>
-                            <div class="input-meta">
-                                <span class="meta-item"><i class="fa-solid fa-shield-halved"></i> Failover Waterfall: Active</span>
-                                <span class="meta-item" id="active-route-display"><i class="fa-solid fa-wand-magic-sparkles"></i> Mode: Auto Intent</span>
-                                <span class="meta-item"><i class="fa-solid fa-lock"></i> End-to-End Local Vault</span>
-                            </div>
+                        </div>
+
+                        <div class="input-footer-note">
+                            <span>GENESIS AI 5.0 can make mistakes. Consider checking important information.</span>
                         </div>
                     </div>
+
                 </div>
             </section>
 
-            <!-- TAB 2: MODEL ARENA (4-WAY LIVE DUEL) -->
-            <section id="tab-arena" class="tab-pane">
+            <!-- WORKSPACE 2: 4-WAY MODEL ARENA -->
+            <section id="tab-arena" class="workspace-pane">
                 <div class="arena-layout">
                     <div class="arena-topbar glass-panel">
                         <div class="arena-header">
@@ -420,8 +427,8 @@
                 </div>
             </section>
 
-            <!-- TAB 3: NEURAL ROUTING VISUAL GRAPH -->
-            <section id="tab-graph" class="tab-pane">
+            <!-- WORKSPACE 3: NEURAL ROUTING VISUAL GRAPH -->
+            <section id="tab-graph" class="workspace-pane">
                 <div class="graph-view glass-panel">
                     <div class="view-header">
                         <div>
@@ -437,7 +444,6 @@
 
                     <div class="graph-canvas-container">
                         <svg class="neural-svg" id="routing-svg" viewBox="0 0 1200 600" width="100%" height="100%">
-                            <!-- SVG Definitions -->
                             <defs>
                                 <linearGradient id="grad-cyan" x1="0%" y1="0%" x2="100%" y2="100%">
                                     <stop offset="0%" stop-color="#00f0ff"/>
@@ -449,17 +455,13 @@
                                 </filter>
                             </defs>
 
-                            <!-- Connecting Lines -->
                             <g class="graph-links" id="svg-links">
-                                <!-- Prompt -> Classifier -->
                                 <path d="M 180 300 C 260 300, 280 300, 360 300" class="flow-line" />
-                                <!-- Classifier -> 5 Tiers -->
                                 <path d="M 520 300 C 600 300, 600 120, 680 120" class="flow-line active" />
                                 <path d="M 520 300 C 600 300, 600 210, 680 210" class="flow-line" />
                                 <path d="M 520 300 C 600 300, 600 300, 680 300" class="flow-line" />
                                 <path d="M 520 300 C 600 300, 600 390, 680 390" class="flow-line" />
                                 <path d="M 520 300 C 600 300, 600 480, 680 480" class="flow-line" />
-                                <!-- Tiers -> Fallback / Destination Nodes -->
                                 <path d="M 860 120 C 940 120, 960 200, 1040 200" class="flow-line" />
                                 <path d="M 860 210 C 940 210, 960 250, 1040 250" class="flow-line" />
                                 <path d="M 860 300 C 940 300, 960 300, 1040 300" class="flow-line" />
@@ -467,14 +469,12 @@
                                 <path d="M 860 480 C 940 480, 960 400, 1040 400" class="flow-line" />
                             </g>
 
-                            <!-- Node 1: Input Prompt -->
                             <g class="graph-node" transform="translate(60, 250)">
                                 <rect width="120" height="100" rx="14" fill="#0d1424" stroke="#00f0ff" stroke-width="2" filter="url(#glow-fx)"/>
                                 <text x="60" y="45" text-anchor="middle" fill="#00f0ff" font-family="Outfit" font-size="14" font-weight="700">USER INPUT</text>
                                 <text x="60" y="70" text-anchor="middle" fill="#94a3b8" font-family="Inter" font-size="11">Prompt / Code / Voice</text>
                             </g>
 
-                            <!-- Node 2: Intent Analyzer -->
                             <g class="graph-node" transform="translate(360, 240)">
                                 <rect width="160" height="120" rx="16" fill="#11192e" stroke="#8b5cf6" stroke-width="2" filter="url(#glow-fx)"/>
                                 <text x="80" y="45" text-anchor="middle" fill="#c4b5fd" font-family="Outfit" font-size="14" font-weight="700">INTENT CLASSIFIER</text>
@@ -482,42 +482,36 @@
                                 <text x="80" y="92" text-anchor="middle" fill="#10b981" font-family="JetBrains Mono" font-size="10">Confidence: 98%</text>
                             </g>
 
-                            <!-- Node 3: Tier 1 Ultra-Speed -->
                             <g class="graph-node" transform="translate(680, 80)">
                                 <rect width="180" height="75" rx="12" fill="#0d1b2a" stroke="#00f0ff" stroke-width="1.5"/>
                                 <text x="90" y="32" text-anchor="middle" fill="#00f0ff" font-family="Outfit" font-size="12" font-weight="700">⚡ ULTRA-SPEED TIER</text>
                                 <text x="90" y="55" text-anchor="middle" fill="#94a3b8" font-family="Inter" font-size="10">Groq / Cerebras (&lt;100ms)</text>
                             </g>
 
-                            <!-- Node 4: Tier 2 Deep Reasoning -->
                             <g class="graph-node" transform="translate(680, 175)">
                                 <rect width="180" height="75" rx="12" fill="#0d1b2a" stroke="#8b5cf6" stroke-width="1.5"/>
                                 <text x="90" y="32" text-anchor="middle" fill="#c4b5fd" font-family="Outfit" font-size="12" font-weight="700">🧠 DEEP REASONING</text>
                                 <text x="90" y="55" text-anchor="middle" fill="#94a3b8" font-family="Inter" font-size="10">DeepSeek R1 / o3 / Gemini</text>
                             </g>
 
-                            <!-- Node 5: Tier 3 Elite Code -->
                             <g class="graph-node" transform="translate(680, 265)">
                                 <rect width="180" height="75" rx="12" fill="#0d1b2a" stroke="#10b981" stroke-width="1.5"/>
                                 <text x="90" y="32" text-anchor="middle" fill="#6ee7b7" font-family="Outfit" font-size="12" font-weight="700">💻 ELITE CODE TIER</text>
                                 <text x="90" y="55" text-anchor="middle" fill="#94a3b8" font-family="Inter" font-size="10">Claude 3.7 / Codestral</text>
                             </g>
 
-                            <!-- Node 6: Tier 4 Free Zero-Cost -->
                             <g class="graph-node" transform="translate(680, 355)">
                                 <rect width="180" height="75" rx="12" fill="#0d1b2a" stroke="#f59e0b" stroke-width="1.5"/>
                                 <text x="90" y="32" text-anchor="middle" fill="#fcd34d" font-family="Outfit" font-size="12" font-weight="700">🆓 ZERO-COST FREE</text>
                                 <text x="90" y="55" text-anchor="middle" fill="#94a3b8" font-family="Inter" font-size="10">OpenRouter Free / Groq / AI Studio</text>
                             </g>
 
-                            <!-- Node 7: Tier 5 Live Web Search -->
                             <g class="graph-node" transform="translate(680, 445)">
                                 <rect width="180" height="75" rx="12" fill="#0d1b2a" stroke="#ec4899" stroke-width="1.5"/>
                                 <text x="90" y="32" text-anchor="middle" fill="#f472b6" font-family="Outfit" font-size="12" font-weight="700">🌐 GROUNDED SEARCH</text>
                                 <text x="90" y="55" text-anchor="middle" fill="#94a3b8" font-family="Inter" font-size="10">Perplexity Sonar & Citations</text>
                             </g>
 
-                            <!-- Node 8: Fallback Waterfall Execution Matrix -->
                             <g class="graph-node" transform="translate(1020, 200)">
                                 <rect width="150" height="200" rx="16" fill="#131c31" stroke="#00f0ff" stroke-width="2" filter="url(#glow-fx)"/>
                                 <text x="75" y="45" text-anchor="middle" fill="#00f0ff" font-family="Outfit" font-size="13" font-weight="700">FALLBACK MATRIX</text>
@@ -533,8 +527,8 @@
                 </div>
             </section>
 
-            <!-- TAB 4: MASTER PROVIDER DIRECTORY -->
-            <section id="tab-providers" class="tab-pane">
+            <!-- WORKSPACE 4: MASTER 20 PROVIDERS DIRECTORY -->
+            <section id="tab-providers" class="workspace-pane">
                 <div class="providers-view">
                     <div class="view-header glass-panel">
                         <div>
@@ -548,14 +542,12 @@
                         </div>
                     </div>
 
-                    <div class="providers-grid" id="providers-grid-container">
-                        <!-- Rendered dynamically by app.js -->
-                    </div>
+                    <div class="providers-grid" id="providers-grid-container"></div>
                 </div>
             </section>
 
-            <!-- TAB 5: 100% FREE ZERO-COST AI HUB -->
-            <section id="tab-freehub" class="tab-pane">
+            <!-- WORKSPACE 5: 100% FREE AI HUB -->
+            <section id="tab-freehub" class="workspace-pane">
                 <div class="freehub-view">
                     <div class="view-header glass-panel">
                         <div>
@@ -651,8 +643,8 @@
                 </div>
             </section>
 
-            <!-- TAB 6: USER INFORMATION & REAL-TIME ANALYTICS -->
-            <section id="tab-analytics" class="tab-pane">
+            <!-- WORKSPACE 6: REAL-TIME USER TELEMETRY & ANALYTICS -->
+            <section id="tab-analytics" class="workspace-pane">
                 <div class="analytics-view glass-panel">
                     <div class="view-header">
                         <div>
@@ -669,7 +661,6 @@
                         </div>
                     </div>
 
-                    <!-- KPI Cards -->
                     <div class="analytics-kpi-grid">
                         <div class="kpi-card">
                             <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
@@ -701,7 +692,6 @@
                         </div>
                     </div>
 
-                    <!-- User Activity Table -->
                     <div class="analytics-table-wrapper">
                         <h3 style="margin-bottom:12px; font-family:var(--font-heading); font-size:1.05rem;">
                             <i class="fa-solid fa-clock-rotate-left"></i> Live User Activity & Request Log
@@ -727,8 +717,8 @@
                 </div>
             </section>
 
-            <!-- TAB 7: ANTIGRAVITY & UNIVERSAL SDK GUIDE -->
-            <section id="tab-proxy" class="tab-pane">
+            <!-- WORKSPACE 7: API PROXY & SDK GUIDE -->
+            <section id="tab-proxy" class="workspace-pane">
                 <div class="proxy-view glass-panel">
                     <div class="proxy-header">
                         <h2><i class="fa-solid fa-terminal"></i> GENESIS AI 5.0 SDK & Universal Proxy Guide</h2>
@@ -736,7 +726,6 @@
                     </div>
 
                     <div class="code-snippets-grid">
-                        <!-- Antigravity Native Python Bridge -->
                         <div class="code-card">
                             <div class="code-header">
                                 <span><i class="fa-brands fa-python"></i> 1. Antigravity Python Bridge (`GenesisAI`)</span>
@@ -760,7 +749,6 @@ claude_res = genesis.chat("Refactor my backend", provider="anthropic", model="cl
 print(claude_res)</code></pre>
                         </div>
 
-                        <!-- Standard OpenAI Python SDK -->
                         <div class="code-card">
                             <div class="code-header">
                                 <span><i class="fa-brands fa-python"></i> 2. Standard OpenAI Python SDK</span>
@@ -768,13 +756,11 @@ print(claude_res)</code></pre>
                             </div>
                             <pre><code class="language-python" id="snippet-openai-py">from openai import OpenAI
 
-# Connect to local GENESIS AI 5.0 Gateway
 client = OpenAI(
     base_url="http://localhost:8000/v1",
     api_key="genesis-ai-local"
 )
 
-# Query flagship virtual models or any specific provider:
 response = client.chat.completions.create(
     model="genesis-ai-5.0", # or "genesis-5.0-reasoning", "genesis-5.0-free", etc.
     messages=[{"role": "user", "content": "How does self-attention work?"}],
@@ -786,7 +772,6 @@ for chunk in response:
     print(content, end="", flush=True)</code></pre>
                         </div>
 
-                        <!-- Node.js / TypeScript SDK -->
                         <div class="code-card">
                             <div class="code-header">
                                 <span><i class="fa-brands fa-node-js"></i> 3. JavaScript / Node.js SDK</span>
@@ -809,7 +794,6 @@ async function main() {
 main();</code></pre>
                         </div>
 
-                        <!-- cURL Command -->
                         <div class="code-card">
                             <div class="code-header">
                                 <span><i class="fa-solid fa-code"></i> 4. cURL Terminal Request</span>

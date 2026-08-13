@@ -1,22 +1,23 @@
 /**
- * GENESIS AI 5.0 - Universal Cognitive Operating System & GUI Controller
+ * GENESIS AI 5.0 - Universal ChatGPT-Style Cognitive Operating System & GUI Controller
  * 2026 Edition
  */
 
 // ==========================================
-// 1. STATE & GLOBAL CONFIGURATION
+// 1. STATE & LOCAL PERSISTENCE
 // ==========================================
 const state = {
     activeTab: 'chat',
-    activeProfile: 'auto',
     activeModel: 'auto',
-    temperature: 0.7,
+    activeProfile: 'auto',
+    currentChatId: null,
+    chats: {}, // { id: { id, title, model, profile, timestamp, messages: [] } }
     isStreaming: false,
     soundEffects: true,
     activeTheme: 'quantum',
     providers: {},
-    totalRequests: 0,
-    totalTokens: 0,
+    searchToggled: false,
+    reasonToggled: false,
     startTime: 0,
     tokenCounter: 0,
 };
@@ -25,16 +26,12 @@ const state = {
 // 2. AUDIO SYNTHESIS ENGINE (Sci-Fi Sound FX)
 // ==========================================
 class SoundFX {
-    constructor() {
-        this.ctx = null;
-    }
-
+    constructor() { this.ctx = null; }
     init() {
         if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         }
     }
-
     playClick() {
         if (!state.soundEffects) return;
         this.init();
@@ -44,16 +41,15 @@ class SoundFX {
             const gain = this.ctx.createGain();
             osc.type = 'sine';
             osc.frequency.setValueAtTime(800, this.ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.05);
-            gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+            osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.04);
+            gain.gain.setValueAtTime(0.06, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
             osc.connect(gain);
             gain.connect(this.ctx.destination);
             osc.start();
-            osc.stop(this.ctx.currentTime + 0.05);
+            osc.stop(this.ctx.currentTime + 0.04);
         } catch(e) {}
     }
-
     playTransmit() {
         if (!state.soundEffects) return;
         this.init();
@@ -63,16 +59,15 @@ class SoundFX {
             const gain = this.ctx.createGain();
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(440, this.ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.12);
-            gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+            osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
             osc.connect(gain);
             gain.connect(this.ctx.destination);
             osc.start();
-            osc.stop(this.ctx.currentTime + 0.12);
+            osc.stop(this.ctx.currentTime + 0.1);
         } catch(e) {}
     }
-
     playComplete() {
         if (!state.soundEffects) return;
         this.init();
@@ -84,17 +79,17 @@ class SoundFX {
             const gain = this.ctx.createGain();
             osc1.type = 'sine';
             osc2.type = 'sine';
-            osc1.frequency.setValueAtTime(587.33, now); // D5
-            osc2.frequency.setValueAtTime(880, now + 0.08); // A5
-            gain.gain.setValueAtTime(0.08, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            osc1.frequency.setValueAtTime(587.33, now);
+            osc2.frequency.setValueAtTime(880, now + 0.06);
+            gain.gain.setValueAtTime(0.06, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
             osc1.connect(gain);
             osc2.connect(gain);
             gain.connect(this.ctx.destination);
             osc1.start(now);
-            osc1.stop(now + 0.08);
-            osc2.start(now + 0.08);
-            osc2.stop(now + 0.25);
+            osc1.stop(now + 0.06);
+            osc2.start(now + 0.06);
+            osc2.stop(now + 0.22);
         } catch(e) {}
     }
 }
@@ -123,8 +118,8 @@ function initNeuralCanvas() {
         particles.push({
             x: Math.random() * width,
             y: Math.random() * height,
-            vx: (Math.random() - 0.5) * 0.4,
-            vy: (Math.random() - 0.5) * 0.4,
+            vx: (Math.random() - 0.5) * 0.35,
+            vy: (Math.random() - 0.5) * 0.35,
             radius: Math.random() * 2 + 1,
             alpha: Math.random() * 0.5 + 0.2
         });
@@ -152,7 +147,6 @@ function initNeuralCanvas() {
             ctx.fillStyle = `rgba(0, 240, 255, ${p.alpha})`;
             ctx.fill();
 
-            // Connect lines
             for (let j = i + 1; j < particles.length; j++) {
                 const p2 = particles[j];
                 const dx = p.x - p2.x;
@@ -163,22 +157,21 @@ function initNeuralCanvas() {
                     ctx.beginPath();
                     ctx.moveTo(p.x, p.y);
                     ctx.lineTo(p2.x, p2.y);
-                    ctx.strokeStyle = `rgba(0, 240, 255, ${0.15 * (1 - dist / 130)})`;
+                    ctx.strokeStyle = `rgba(0, 240, 255, ${0.12 * (1 - dist / 130)})`;
                     ctx.lineWidth = 0.8;
                     ctx.stroke();
                 }
             }
 
-            // Mouse proximity
             if (mouse.x !== null) {
                 const mdx = p.x - mouse.x;
                 const mdy = p.y - mouse.y;
                 const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
-                if (mdist < 150) {
+                if (mdist < 140) {
                     ctx.beginPath();
                     ctx.moveTo(p.x, p.y);
                     ctx.lineTo(mouse.x, mouse.y);
-                    ctx.strokeStyle = `rgba(139, 92, 246, ${0.3 * (1 - mdist / 150)})`;
+                    ctx.strokeStyle = `rgba(139, 92, 246, ${0.25 * (1 - mdist / 140)})`;
                     ctx.lineWidth = 1;
                     ctx.stroke();
                 }
@@ -190,17 +183,260 @@ function initNeuralCanvas() {
 }
 
 // ==========================================
-// 4. UI NAVIGATION & WORKSPACE TABS
+// 4. CHATGPT MULTI-CONVERSATION MANAGER
 // ==========================================
-function initNavigation() {
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tabName = btn.dataset.tab;
-            sfx.playClick();
-            switchTab(tabName);
+function loadSavedChats() {
+    try {
+        const raw = localStorage.getItem('genesis_chats');
+        if (raw) state.chats = JSON.parse(raw);
+    } catch(e) { state.chats = {}; }
+
+    renderChatHistory();
+
+    const chatIds = Object.keys(state.chats);
+    if (chatIds.length > 0) {
+        switchChat(chatIds[chatIds.length - 1]);
+    } else {
+        createNewChat();
+    }
+}
+
+function saveChatsToStorage() {
+    try {
+        localStorage.setItem('genesis_chats', JSON.stringify(state.chats));
+    } catch(e) {}
+}
+
+function createNewChat() {
+    const id = 'chat-' + Date.now();
+    state.currentChatId = id;
+    state.chats[id] = {
+        id: id,
+        title: 'New chat',
+        model: state.activeModel,
+        profile: state.activeProfile,
+        timestamp: Date.now(),
+        messages: []
+    };
+    saveChatsToStorage();
+    renderChatHistory();
+    renderChatMessages();
+    sfx.playClick();
+}
+
+function switchChat(chatId) {
+    if (!state.chats[chatId]) return;
+    state.currentChatId = chatId;
+    renderChatHistory();
+    renderChatMessages();
+    sfx.playClick();
+}
+
+function deleteChat(chatId, e) {
+    if (e) e.stopPropagation();
+    delete state.chats[chatId];
+    saveChatsToStorage();
+    const remaining = Object.keys(state.chats);
+    if (remaining.length > 0) {
+        switchChat(remaining[remaining.length - 1]);
+    } else {
+        createNewChat();
+    }
+    showToast('Chat deleted');
+    sfx.playClick();
+}
+
+function renderChatHistory() {
+    const container = document.getElementById('chat-history-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const sorted = Object.values(state.chats).sort((a, b) => b.timestamp - a.timestamp);
+
+    sorted.forEach(chat => {
+        const item = document.createElement('div');
+        item.className = `history-item ${chat.id === state.currentChatId ? 'active' : ''}`;
+        item.innerHTML = `
+            <span class="history-title"><i class="fa-regular fa-message" style="margin-right:8px; font-size:11px;"></i>${escapeHtml(chat.title)}</span>
+            <div class="history-actions">
+                <button class="history-btn" title="Delete chat" onclick="deleteChat('${chat.id}', event)"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+        `;
+        item.onclick = () => switchChat(chat.id);
+        container.appendChild(item);
+    });
+}
+
+function renderChatMessages() {
+    const feed = document.getElementById('chat-messages');
+    if (!feed) return;
+
+    const chat = state.chats[state.currentChatId];
+    if (!chat || !chat.messages || chat.messages.length === 0) {
+        feed.innerHTML = `
+            <div class="chatgpt-welcome" id="chatgpt-welcome-screen">
+                <div class="welcome-hero-logo">
+                    <img src="logo.png" alt="GENESIS AI 5.0" class="hero-logo-img">
+                    <div class="hero-logo-halo"></div>
+                </div>
+                <h1>What can I help with today?</h1>
+                <p class="welcome-tagline">GENESIS AI 5.0 connects 20+ frontier models with instant auto-routing, deep reasoning, and zero-cost fallbacks.</p>
+                <div class="chatgpt-prompt-cards">
+                    <button class="prompt-card" data-prompt="Explain quantum key distribution (BB84 protocol) with a complete Python simulation script.">
+                        <div class="card-icon"><i class="fa-solid fa-atom"></i></div>
+                        <div class="card-text">
+                            <strong>Quantum Key Distribution</strong>
+                            <span>BB84 simulation with Python code</span>
+                        </div>
+                    </button>
+                    <button class="prompt-card" data-prompt="Prove by mathematical induction that for all n >= 1: 1 + 2 + 3 + ... + n = n(n+1)/2. Show full reasoning.">
+                        <div class="card-icon"><i class="fa-solid fa-brain"></i></div>
+                        <div class="card-text">
+                            <strong>Mathematical Induction Proof</strong>
+                            <span>Deep step-by-step reasoning proof</span>
+                        </div>
+                    </button>
+                    <button class="prompt-card" data-prompt="Compare Transformer attention mechanisms vs Mamba state-space models in 3 ultra-fast bullet points.">
+                        <div class="card-icon"><i class="fa-solid fa-bolt"></i></div>
+                        <div class="card-text">
+                            <strong>Transformer vs Mamba</strong>
+                            <span>Ultra-speed architectural summary</span>
+                        </div>
+                    </button>
+                    <button class="prompt-card" data-prompt="What are the latest frontier AI agent advancements and breakthroughs in 2026?">
+                        <div class="card-icon"><i class="fa-solid fa-globe"></i></div>
+                        <div class="card-text">
+                            <strong>2026 AI Agent Advancements</strong>
+                            <span>Autonomous multi-agent research</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        `;
+        bindPromptCards();
+        return;
+    }
+
+    feed.innerHTML = '';
+    chat.messages.forEach(msg => {
+        if (msg.role === 'user') {
+            const userWrap = document.createElement('div');
+            userWrap.className = 'message-wrap user';
+            userWrap.innerHTML = `
+                <div class="msg-content-box">${escapeHtml(msg.content)}</div>
+            `;
+            feed.appendChild(userWrap);
+        } else {
+            const aiWrap = document.createElement('div');
+            aiWrap.className = 'message-wrap ai';
+            const parsedHtml = window.marked ? marked.parse(msg.content) : escapeHtml(msg.content);
+            aiWrap.innerHTML = `
+                <div class="msg-avatar-col">
+                    <div class="msg-ai-avatar"><i class="fa-solid fa-brain-circuit"></i></div>
+                </div>
+                <div class="msg-content-box">
+                    ${parsedHtml}
+                    <div class="msg-actions-strip">
+                        <button class="msg-action-btn" title="Copy text" onclick="copyRawText(this)"><i class="fa-regular fa-copy"></i></button>
+                        <button class="msg-action-btn" title="Speak aloud" onclick="speakRawText(this)"><i class="fa-solid fa-volume-high"></i></button>
+                    </div>
+                </div>
+            `;
+            feed.appendChild(aiWrap);
+        }
+    });
+
+    // Code syntax highlighting
+    if (window.hljs) {
+        feed.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+    }
+    feed.scrollTop = feed.scrollHeight;
+}
+
+function bindPromptCards() {
+    document.querySelectorAll('.prompt-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const prompt = card.dataset.prompt;
+            const input = document.getElementById('chat-input');
+            if (input) {
+                input.value = prompt;
+                submitChatMessage();
+            }
         });
     });
+}
+
+// ==========================================
+// 5. SIDEBAR & NAVIGATION CONTROLS
+// ==========================================
+function initNavigation() {
+    const sidebar = document.getElementById('app-sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle-btn');
+    const newChatBtn = document.getElementById('new-chat-btn');
+
+    if (toggleBtn && sidebar) {
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            sfx.playClick();
+        });
+    }
+
+    if (newChatBtn) {
+        newChatBtn.addEventListener('click', createNewChat);
+    }
+
+    // Keyboard shortcut Ctrl+K
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            createNewChat();
+        }
+    });
+
+    // Workspace Navigation Tabs
+    const navItems = document.querySelectorAll('.side-nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            const tabName = item.dataset.tab;
+            sfx.playClick();
+            switchWorkspaceTab(tabName);
+        });
+    });
+
+    // Model Dropdown Trigger (Top Bar)
+    const modelBtn = document.getElementById('model-dropdown-trigger');
+    const modelMenu = document.getElementById('model-dropdown-menu');
+    if (modelBtn && modelMenu) {
+        modelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            modelMenu.classList.toggle('hidden');
+            sfx.playClick();
+        });
+
+        document.addEventListener('click', () => {
+            modelMenu.classList.add('hidden');
+        });
+
+        document.querySelectorAll('.model-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                const model = opt.dataset.model;
+                const profile = opt.dataset.profile;
+                state.activeModel = model;
+                state.activeProfile = profile;
+
+                document.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+
+                const label = document.getElementById('header-model-label');
+                const badge = document.getElementById('header-model-badge');
+                if (label) label.innerText = opt.querySelector('.model-opt-title').childNodes[0].nodeValue.trim();
+                if (badge) badge.innerText = profile.toUpperCase();
+
+                showToast(`Model switched to ${model}`);
+                sfx.playClick();
+            });
+        });
+    }
 
     // Theme Picker
     const themeBtn = document.getElementById('theme-btn');
@@ -211,10 +447,7 @@ function initNavigation() {
             themeMenu.classList.toggle('hidden');
             sfx.playClick();
         });
-
-        document.addEventListener('click', () => {
-            themeMenu.classList.add('hidden');
-        });
+        document.addEventListener('click', () => themeMenu.classList.add('hidden'));
 
         document.querySelectorAll('.theme-opt').forEach(opt => {
             opt.addEventListener('click', () => {
@@ -223,7 +456,7 @@ function initNavigation() {
                 document.querySelectorAll('.theme-opt').forEach(o => o.classList.remove('active'));
                 opt.classList.add('active');
                 state.activeTheme = chosen;
-                showToast(`Theme switched to ${chosen.toUpperCase()}`);
+                showToast(`Theme: ${chosen.toUpperCase()}`);
                 sfx.playClick();
             });
         });
@@ -236,12 +469,12 @@ function initNavigation() {
             state.soundEffects = !state.soundEffects;
             sfxBtn.classList.toggle('active', state.soundEffects);
             sfxBtn.innerHTML = state.soundEffects ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
-            showToast(state.soundEffects ? 'Sound FX Enabled' : 'Sound FX Muted');
+            showToast(state.soundEffects ? 'Sound FX On' : 'Sound FX Off');
             if (state.soundEffects) sfx.playClick();
         });
     }
 
-    // Fullscreen Toggle
+    // Fullscreen
     const fsBtn = document.getElementById('fullscreen-btn');
     if (fsBtn) {
         fsBtn.addEventListener('click', () => {
@@ -253,15 +486,20 @@ function initNavigation() {
             sfx.playClick();
         });
     }
+
+    // Settings trigger
+    document.getElementById('open-settings-btn')?.addEventListener('click', () => {
+        openKeyModal('gemini', 'Google Gemini (Free Tier)', 'GEMINI_API_KEY', 'https://aistudio.google.com/app/apikey');
+    });
 }
 
-function switchTab(tabName) {
+function switchWorkspaceTab(tabName) {
     state.activeTab = tabName;
-    document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.tab === tabName);
+    document.querySelectorAll('.side-nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.tab === tabName);
     });
-    document.querySelectorAll('.tab-pane').forEach(p => {
-        p.classList.toggle('active', p.id === `tab-${tabName}`);
+    document.querySelectorAll('.workspace-pane').forEach(pane => {
+        pane.classList.toggle('active', pane.id === `tab-${tabName}`);
     });
 
     if (tabName === 'providers') loadProviders();
@@ -269,115 +507,68 @@ function switchTab(tabName) {
 }
 
 // ==========================================
-// 5. COGNITIVE CHAT CONTROLLER
+// 6. CHATGPT INPUT & STREAM CONTROLLER
 // ==========================================
-function initChat() {
-    const chatInput = document.getElementById('chat-input');
+function initChatInput() {
+    const input = document.getElementById('chat-input');
     const sendBtn = document.getElementById('send-btn');
-    const tempSlider = document.getElementById('temp-slider');
-    const tempVal = document.getElementById('temp-val');
-    const clearBtn = document.getElementById('clear-chat-btn');
-    const directModelSelect = document.getElementById('direct-model-select');
+    const searchBtn = document.getElementById('toggle-search-btn');
+    const reasonBtn = document.getElementById('toggle-reason-btn');
 
-    // Profile Chips
-    document.querySelectorAll('.profile-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('.profile-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            state.activeProfile = chip.dataset.profile;
-            sfx.playClick();
-            
-            const activeRouteDisplay = document.getElementById('active-route-display');
-            if (activeRouteDisplay) {
-                activeRouteDisplay.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Mode: ${chip.querySelector('.chip-title').innerText}`;
-            }
-
-            // Sync select
-            if (state.activeProfile === 'auto') {
-                directModelSelect.value = 'auto';
-            } else if (state.activeProfile === 'free_tier') {
-                directModelSelect.value = 'genesis-5.0-free';
-            } else if (state.activeProfile === 'speed') {
-                directModelSelect.value = 'genesis-5.0-speed';
-            } else if (state.activeProfile === 'reasoning') {
-                directModelSelect.value = 'genesis-5.0-reasoning';
-            } else if (state.activeProfile === 'coding') {
-                directModelSelect.value = 'genesis-5.0-coder';
-            } else if (state.activeProfile === 'search') {
-                directModelSelect.value = 'genesis-5.0-search';
-            }
+    if (input) {
+        input.addEventListener('input', () => {
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 140) + 'px';
         });
-    });
 
-    // Model Select
-    if (directModelSelect) {
-        directModelSelect.addEventListener('change', () => {
-            state.activeModel = directModelSelect.value;
-            sfx.playClick();
-        });
-    }
-
-    // Temperature
-    if (tempSlider && tempVal) {
-        tempSlider.addEventListener('input', () => {
-            state.temperature = parseFloat(tempSlider.value);
-            tempVal.innerText = state.temperature.toFixed(2);
-        });
-    }
-
-    // Send on Enter
-    if (chatInput) {
-        chatInput.addEventListener('keydown', (e) => {
+        input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                submitChat();
+                submitChatMessage();
             }
-        });
-        chatInput.addEventListener('input', () => {
-            chatInput.style.height = 'auto';
-            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
         });
     }
 
     if (sendBtn) {
-        sendBtn.addEventListener('click', submitChat);
+        sendBtn.addEventListener('click', submitChatMessage);
     }
 
-    // Quick Prompts
-    document.querySelectorAll('.quick-prompt').forEach(qp => {
-        qp.addEventListener('click', () => {
-            const prompt = qp.dataset.prompt;
-            if (chatInput) {
-                chatInput.value = prompt;
-                submitChat();
-            }
-        });
-    });
-
-    // Clear Chat
-    if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-            const container = document.getElementById('chat-messages');
-            if (container) {
-                container.innerHTML = `
-                <div class="welcome-card glass-panel">
-                    <div class="welcome-logo-wrap">
-                        <img src="/static/logo.png" alt="GENESIS AI 5.0" class="welcome-logo">
-                        <div class="welcome-halo"></div>
-                    </div>
-                    <h2>GENESIS AI 5.0 Stream Cleared</h2>
-                    <p>Ready for next prompt. Cognitive router is armed with 20+ frontier AI ecosystems.</p>
-                </div>`;
+    // Search Toggle Button
+    if (searchBtn) {
+        searchBtn.addEventListener('click', () => {
+            state.searchToggled = !state.searchToggled;
+            searchBtn.classList.toggle('active', state.searchToggled);
+            if (state.searchToggled) {
+                state.activeProfile = 'search';
+                state.activeModel = 'genesis-5.0-search';
+            } else {
+                state.activeProfile = 'auto';
+                state.activeModel = 'auto';
             }
             sfx.playClick();
         });
     }
 
-    // Voice Input (Speech Recognition)
+    // Reason Toggle Button
+    if (reasonBtn) {
+        reasonBtn.addEventListener('click', () => {
+            state.reasonToggled = !state.reasonToggled;
+            reasonBtn.classList.toggle('active', state.reasonToggled);
+            if (state.reasonToggled) {
+                state.activeProfile = 'reasoning';
+                state.activeModel = 'genesis-5.0-reasoning';
+            } else {
+                state.activeProfile = 'auto';
+                state.activeModel = 'auto';
+            }
+            sfx.playClick();
+        });
+    }
+
     initVoiceInput();
 }
 
-async function submitChat() {
+async function submitChatMessage() {
     const input = document.getElementById('chat-input');
     const prompt = input.value.trim();
     if (!prompt || state.isStreaming) return;
@@ -387,59 +578,56 @@ async function submitChat() {
     state.isStreaming = true;
     sfx.playTransmit();
 
-    const messagesContainer = document.getElementById('chat-messages');
-    
-    // Remove welcome card if present
-    const welcomeCard = messagesContainer.querySelector('.welcome-card');
-    if (welcomeCard) welcomeCard.remove();
-
-    // Render User Message
-    const userRow = document.createElement('div');
-    userRow.className = 'message-row user';
-    userRow.innerHTML = `
-        <div class="msg-bubble">
-            <div class="msg-body">${escapeHtml(prompt)}</div>
-        </div>
-        <div class="msg-avatar user"><i class="fa-solid fa-user"></i></div>
-    `;
-    messagesContainer.appendChild(userRow);
-
-    // Show Routing Banner
-    const routingBanner = document.getElementById('routing-banner');
-    const routeTitle = document.getElementById('route-banner-title');
-    const routeDesc = document.getElementById('route-banner-desc');
-    const routeTags = document.getElementById('route-banner-tags');
-    if (routingBanner) {
-        routingBanner.classList.remove('hidden');
-        routeTitle.innerText = "GENESIS Cognitive Router Armed";
-        routeDesc.innerText = `Analyzing prompt intent for profile: ${state.activeProfile.toUpperCase()}...`;
-        routeTags.innerHTML = `<span class="banner-tag-item">PROFILE: ${state.activeProfile}</span><span class="banner-tag-item">TEMP: ${state.temperature}</span>`;
+    if (!state.currentChatId || !state.chats[state.currentChatId]) {
+        createNewChat();
     }
 
-    // Render AI Stream Placeholder
-    const aiRow = document.createElement('div');
-    aiRow.className = 'message-row ai';
+    const currentChat = state.chats[state.currentChatId];
+
+    // Set title from first user prompt
+    if (currentChat.messages.length === 0) {
+        currentChat.title = prompt.length > 28 ? prompt.substring(0, 28) + '...' : prompt;
+        renderChatHistory();
+    }
+
+    // Add user message
+    currentChat.messages.push({ role: 'user', content: prompt });
+    saveChatsToStorage();
+
+    const feed = document.getElementById('chat-messages');
+    const welcome = document.getElementById('chatgpt-welcome-screen');
+    if (welcome) welcome.remove();
+
+    // Render User Message
+    const userWrap = document.createElement('div');
+    userWrap.className = 'message-wrap user';
+    userWrap.innerHTML = `<div class="msg-content-box">${escapeHtml(prompt)}</div>`;
+    feed.appendChild(userWrap);
+
+    // AI Message Placeholder
+    const aiWrap = document.createElement('div');
+    aiWrap.className = 'message-wrap ai';
     const msgId = 'msg-' + Date.now();
-    aiRow.innerHTML = `
-        <div class="msg-avatar ai"><i class="fa-solid fa-brain-circuit"></i></div>
-        <div class="msg-bubble">
-            <div class="msg-header">
-                <div class="msg-header-left">
-                    <span class="msg-provider-tag" id="${msgId}-tag">GENESIS AI 5.0</span>
-                    <span class="msg-latency-tag" id="${msgId}-latency"><i class="fa-solid fa-spinner fa-spin"></i> Routing...</span>
+    aiWrap.innerHTML = `
+        <div class="msg-avatar-col">
+            <div class="msg-ai-avatar"><i class="fa-solid fa-brain-circuit"></i></div>
+        </div>
+        <div class="msg-content-box" id="${msgId}-content">
+            <div class="thought-accordion hidden" id="${msgId}-thought">
+                <div class="thought-header" onclick="toggleThought('${msgId}')">
+                    <i class="fa-solid fa-brain"></i>
+                    <span>Thinking Process...</span>
+                    <i class="fa-solid fa-chevron-down" style="margin-left:auto; font-size:10px;"></i>
                 </div>
-                <div class="msg-actions">
-                    <button class="msg-action-btn copy-btn" title="Copy Text" onclick="copyMessage('${msgId}')"><i class="fa-regular fa-copy"></i></button>
-                    <button class="msg-action-btn speak-btn" title="Read Aloud" onclick="speakMessage('${msgId}')"><i class="fa-solid fa-volume-high"></i></button>
-                </div>
+                <div class="thought-body" id="${msgId}-thought-body"></div>
             </div>
-            <div class="msg-body" id="${msgId}-body"><span class="typing-cursor">▌</span></div>
+            <div class="msg-text-body" id="${msgId}-body"><span class="typing-cursor">▌</span></div>
         </div>
     `;
-    messagesContainer.appendChild(aiRow);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    feed.appendChild(aiWrap);
+    feed.scrollTop = feed.scrollHeight;
 
-    // Start SSE Stream
+    // Stream SSE
     state.startTime = performance.now();
     state.tokenCounter = 0;
 
@@ -448,7 +636,7 @@ async function submitChat() {
             prompt: prompt,
             profile: state.activeProfile,
             model: state.activeModel !== 'auto' ? state.activeModel : undefined,
-            temperature: state.temperature,
+            temperature: 0.7,
             stream: true
         };
 
@@ -462,8 +650,6 @@ async function submitChat() {
         const decoder = new TextDecoder();
         let fullText = '';
         const bodyEl = document.getElementById(`${msgId}-body`);
-        const tagEl = document.getElementById(`${msgId}-tag`);
-        const latEl = document.getElementById(`${msgId}-latency`);
 
         while (true) {
             const { value, done } = await reader.read();
@@ -482,45 +668,49 @@ async function submitChat() {
                         if (parsed.content) {
                             fullText += parsed.content;
                             state.tokenCounter += parsed.content.split(/\s+/).length || 1;
-                            
-                            // Render markdown
+
                             if (window.marked) {
                                 bodyEl.innerHTML = marked.parse(fullText);
                             } else {
                                 bodyEl.innerText = fullText;
                             }
 
-                            // Update live token speed
+                            // Live tok/s velocity
                             const elapsedSec = (performance.now() - state.startTime) / 1000;
                             const speed = Math.round(state.tokenCounter / (elapsedSec || 1));
                             const hudSpeed = document.getElementById('hud-tok-speed');
                             if (hudSpeed) hudSpeed.innerText = `${speed} tok/s`;
-
-                        } else if (parsed.meta) {
-                            // Routing metadata arrived
-                            if (tagEl) tagEl.innerText = `${parsed.meta.provider.toUpperCase()} / ${parsed.meta.model}`;
-                            if (routeTitle) routeTitle.innerText = `Routed to ${parsed.meta.provider.toUpperCase()}`;
-                            if (routeDesc) routeDesc.innerText = `Intent: ${parsed.meta.intent} | Fallback Waterfall Active`;
                         }
                     } catch(e) {}
                 }
             }
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            feed.scrollTop = feed.scrollHeight;
         }
 
-        const totalLatency = Math.round(performance.now() - state.startTime);
-        if (latEl) latEl.innerText = `${totalLatency} ms`;
-        
-        // Highlight code blocks
+        // Save AI message to history
+        currentChat.messages.push({ role: 'assistant', content: fullText });
+        saveChatsToStorage();
+
+        // Highlight code
         if (window.hljs) {
-            bodyEl.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
+            bodyEl.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+        }
+
+        // Add action buttons
+        const contentBox = document.getElementById(`${msgId}-content`);
+        if (contentBox) {
+            const actions = document.createElement('div');
+            actions.className = 'msg-actions-strip';
+            actions.innerHTML = `
+                <button class="msg-action-btn" title="Copy text" onclick="copyRawText(this)"><i class="fa-regular fa-copy"></i></button>
+                <button class="msg-action-btn" title="Speak aloud" onclick="speakRawText(this)"><i class="fa-solid fa-volume-high"></i></button>
+            `;
+            contentBox.appendChild(actions);
         }
 
         sfx.playComplete();
 
-    } catch (err) {
+    } catch(err) {
         const bodyEl = document.getElementById(`${msgId}-body`);
         if (bodyEl) bodyEl.innerHTML = `<span style="color:var(--accent-rose)"><i class="fa-solid fa-triangle-exclamation"></i> Error: ${err.message}</span>`;
     } finally {
@@ -528,45 +718,46 @@ async function submitChat() {
     }
 }
 
-// Copy & TTS helpers
-window.copyMessage = function(msgId) {
-    const bodyEl = document.getElementById(`${msgId}-body`);
-    if (bodyEl) {
-        navigator.clipboard.writeText(bodyEl.innerText);
-        showToast('Response copied to clipboard!');
+window.toggleThought = function(msgId) {
+    const body = document.getElementById(`${msgId}-thought-body`);
+    if (body) body.classList.toggle('hidden');
+    sfx.playClick();
+};
+
+window.copyRawText = function(btn) {
+    const parentBox = btn.closest('.msg-content-box');
+    if (parentBox) {
+        const text = parentBox.querySelector('.msg-text-body')?.innerText || parentBox.innerText;
+        navigator.clipboard.writeText(text);
+        showToast('Copied to clipboard!');
         sfx.playClick();
     }
 };
 
-window.speakMessage = function(msgId) {
-    const bodyEl = document.getElementById(`${msgId}-body`);
-    if (bodyEl && window.speechSynthesis) {
+window.speakRawText = function(btn) {
+    const parentBox = btn.closest('.msg-content-box');
+    if (parentBox && window.speechSynthesis) {
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(bodyEl.innerText);
+        const text = parentBox.querySelector('.msg-text-body')?.innerText || parentBox.innerText;
+        const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 1.0;
-        utterance.pitch = 1.0;
         window.speechSynthesis.speak(utterance);
-        showToast('Speaking response...');
+        showToast('Reading response aloud...');
         sfx.playClick();
     }
 };
 
 // ==========================================
-// 6. VOICE DICTATION (Speech-To-Text)
+// 7. VOICE INPUT (Speech-to-Text)
 // ==========================================
 function initVoiceInput() {
     const micBtn = document.getElementById('voice-input-btn');
     const waveBar = document.getElementById('voice-wave-bar');
     const chatInput = document.getElementById('chat-input');
-    const voiceStatus = document.getElementById('voice-status-text');
 
     if (!micBtn) return;
-
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRec) {
-        micBtn.title = "Voice recognition not supported in this browser";
-        return;
-    }
+    if (!SpeechRec) return;
 
     const recognition = new SpeechRec();
     recognition.continuous = false;
@@ -577,14 +768,13 @@ function initVoiceInput() {
         if (!isListening) {
             recognition.start();
             isListening = true;
-            micBtn.classList.add('listening');
+            micBtn.style.color = 'var(--accent-rose)';
             if (waveBar) waveBar.classList.remove('hidden');
-            if (voiceStatus) voiceStatus.innerText = "Listening to your voice...";
             sfx.playTransmit();
         } else {
             recognition.stop();
             isListening = false;
-            micBtn.classList.remove('listening');
+            micBtn.style.color = '';
             if (waveBar) waveBar.classList.add('hidden');
         }
     });
@@ -599,27 +789,19 @@ function initVoiceInput() {
 
     recognition.onend = () => {
         isListening = false;
-        micBtn.classList.remove('listening');
+        micBtn.style.color = '';
         if (waveBar) waveBar.classList.add('hidden');
-    };
-
-    recognition.onerror = (e) => {
-        isListening = false;
-        micBtn.classList.remove('listening');
-        if (waveBar) waveBar.classList.add('hidden');
-        showToast(`Voice Error: ${e.error}`);
     };
 }
 
 // ==========================================
-// 7. 4-WAY MODEL ARENA (The Colosseum)
+// 8. 4-WAY MODEL ARENA CONTROLLER
 // ==========================================
 function initArena() {
     const broadcastBtn = document.getElementById('arena-broadcast-btn');
     const promptInput = document.getElementById('arena-prompt-input');
 
     if (!broadcastBtn || !promptInput) return;
-
     broadcastBtn.addEventListener('click', launchArenaDuel);
     promptInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') launchArenaDuel();
@@ -640,7 +822,6 @@ async function launchArenaDuel() {
         document.getElementById('arena-model-3').value,
     ];
 
-    // Reset arena panels
     for (let i = 0; i < 4; i++) {
         const bodyEl = document.getElementById(`arena-body-${i}`);
         const metricEl = document.getElementById(`arena-metric-${i}`);
@@ -650,7 +831,6 @@ async function launchArenaDuel() {
         if (nameEl) nameEl.innerText = selectedModels[i];
     }
 
-    // Launch 4 concurrent requests
     selectedModels.forEach((modelKey, index) => {
         const [provider, model] = modelKey.split('/');
         const startTime = performance.now();
@@ -658,12 +838,7 @@ async function launchArenaDuel() {
         fetch('/api/chat/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: prompt,
-                provider: provider,
-                model: model,
-                stream: true
-            })
+            body: JSON.stringify({ prompt: prompt, provider: provider, model: model, stream: true })
         }).then(res => {
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
@@ -704,7 +879,7 @@ async function launchArenaDuel() {
 }
 
 // ==========================================
-// 8. PROVIDER COMMAND CENTER (20 Providers)
+// 9. PROVIDERS DIRECTORY & KEYS
 // ==========================================
 async function loadProviders() {
     const container = document.getElementById('providers-grid-container');
@@ -746,7 +921,6 @@ async function loadProviders() {
             container.appendChild(card);
         });
 
-        // Batch Ping Button
         const pingAllBtn = document.getElementById('ping-all-btn');
         if (pingAllBtn) {
             pingAllBtn.onclick = () => {
@@ -754,29 +928,22 @@ async function loadProviders() {
                 Object.keys(state.providers).forEach(pid => pingProvider(pid));
             };
         }
-
-    } catch(e) {
-        container.innerHTML = `<div style="color:var(--accent-rose)">Failed to load providers: ${e.message}</div>`;
-    }
+    } catch(e) {}
 }
 
 window.pingProvider = async function(pid) {
     const btn = document.getElementById(`ping-${pid}`);
     if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Pinging...';
-
     const start = performance.now();
     try {
-        const res = await fetch(`/api/providers`);
+        await fetch(`/api/providers`);
         const lat = Math.round(performance.now() - start);
-        if (btn) {
-            btn.innerHTML = `<span style="color:var(--accent-emerald)"><i class="fa-solid fa-check"></i> ${lat} ms</span>`;
-        }
+        if (btn) btn.innerHTML = `<span style="color:var(--accent-emerald)"><i class="fa-solid fa-check"></i> ${lat} ms</span>`;
     } catch(e) {
         if (btn) btn.innerHTML = `<span style="color:var(--accent-rose)">Offline</span>`;
     }
 };
 
-// Modal for Keys
 window.openKeyModal = function(pid, name, envKey, docsUrl) {
     const modal = document.getElementById('key-modal');
     const nameEl = document.getElementById('modal-provider-name');
@@ -786,9 +953,8 @@ window.openKeyModal = function(pid, name, envKey, docsUrl) {
     const keyInput = document.getElementById('modal-key-input');
 
     if (!modal) return;
-
     nameEl.innerText = `Configure ${name}`;
-    descEl.innerText = `Enter the API key for ${name}. It will be saved securely to your local .env vault.`;
+    descEl.innerText = `Enter the API key for ${name}. Saved locally in .env.`;
     envLabel.innerText = `Environment Variable: ${envKey}`;
     linkEl.href = docsUrl || '#';
     keyInput.value = '';
@@ -805,12 +971,12 @@ window.openKeyModal = function(pid, name, envKey, docsUrl) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ env_key: envKey, api_key: val })
             });
-            showToast(`${name} API key updated!`);
+            showToast(`${name} key updated!`);
             modal.classList.add('hidden');
             loadProviders();
             sfx.playComplete();
         } catch(e) {
-            showToast(`Failed to save key: ${e.message}`);
+            showToast(`Error: ${e.message}`);
         }
     };
 };
@@ -823,25 +989,18 @@ document.getElementById('modal-cancel-btn')?.addEventListener('click', () => {
 });
 
 // ==========================================
-// 9. USER ANALYTICS & TELEMETRY
+// 10. REAL-TIME USER ANALYTICS
 // ==========================================
 async function loadAnalytics() {
     try {
         const res = await fetch('/api/analytics');
         const data = await res.json();
 
-        // Update KPIs
-        const kpiUsers = document.getElementById('kpi-users');
-        const kpiRequests = document.getElementById('kpi-requests');
-        const kpiTokens = document.getElementById('kpi-tokens');
-        const kpiLatency = document.getElementById('kpi-latency');
+        document.getElementById('kpi-users').innerText = data.total_users || 0;
+        document.getElementById('kpi-requests').innerText = data.total_requests || 0;
+        document.getElementById('kpi-tokens').innerText = (data.total_tokens || 0).toLocaleString();
+        document.getElementById('kpi-latency').innerText = `${Math.round(data.average_latency_ms || 0)} ms`;
 
-        if (kpiUsers) kpiUsers.innerText = data.total_users || 0;
-        if (kpiRequests) kpiRequests.innerText = data.total_requests || 0;
-        if (kpiTokens) kpiTokens.innerText = (data.total_tokens || 0).toLocaleString();
-        if (kpiLatency) kpiLatency.innerText = `${Math.round(data.average_latency_ms || 0)} ms`;
-
-        // Populate Table
         const tbody = document.getElementById('analytics-tbody');
         if (tbody) {
             tbody.innerHTML = '';
@@ -873,16 +1032,14 @@ document.getElementById('refresh-analytics-btn')?.addEventListener('click', () =
 });
 
 // ==========================================
-// 10. NEURAL GRAPH SIMULATION (Tab 3)
+// 11. GRAPH SIMULATION & TOAST UTILITIES
 // ==========================================
 function initGraph() {
     const simBtn = document.getElementById('simulate-graph-btn');
     if (!simBtn) return;
-
     simBtn.addEventListener('click', () => {
         sfx.playTransmit();
-        const links = document.querySelectorAll('.flow-line');
-        links.forEach(l => {
+        document.querySelectorAll('.flow-line').forEach(l => {
             l.classList.add('active');
             setTimeout(() => l.classList.remove('active'), 2500);
         });
@@ -890,9 +1047,6 @@ function initGraph() {
     });
 }
 
-// ==========================================
-// 11. TOAST & UTILITIES
-// ==========================================
 function showToast(msg) {
     const toast = document.getElementById('toast');
     if (!toast) return;
@@ -905,14 +1059,13 @@ function escapeHtml(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Copy Code Snippets in Tab 7
 document.querySelectorAll('.copy-code-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const targetId = btn.dataset.target;
         const codeEl = document.getElementById(targetId);
         if (codeEl) {
             navigator.clipboard.writeText(codeEl.innerText);
-            showToast('Code snippet copied to clipboard!');
+            showToast('Code copied to clipboard!');
             sfx.playClick();
         }
     });
@@ -924,12 +1077,11 @@ document.querySelectorAll('.copy-code-btn').forEach(btn => {
 document.addEventListener('DOMContentLoaded', () => {
     initNeuralCanvas();
     initNavigation();
-    initChat();
+    initChatInput();
     initArena();
     initGraph();
+    loadSavedChats();
     loadProviders();
     loadAnalytics();
-
-    // Auto-refresh analytics every 10s
     setInterval(loadAnalytics, 10000);
 });
