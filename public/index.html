@@ -15,18 +15,26 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
+    <!-- Cinematic GUI Stylesheet -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Interactive Particle Matrix Canvas Background -->
-    <canvas id="neural-canvas"></canvas>
+    <!-- Cinematic AI & Neural Background Backdrop -->
+    <div class="cinematic-backdrop">
+        <div class="ai-bg-image"></div>
+        <div class="ai-overlay-grid"></div>
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+        <canvas id="neural-canvas"></canvas>
+    </div>
 
     <div class="app-container">
         <!-- Top Master HUD & OS Navigation Bar -->
         <header class="top-nav glass-panel">
             <div class="nav-brand">
                 <div class="brand-logo-container">
-                    <img src="/static/logo.png" alt="GENESIS AI 5.0 Logo" class="brand-logo-img">
+                    <img src="logo.png" alt="GENESIS AI 5.0 Logo" class="brand-logo-img">
                     <span class="logo-pulse-ring"></span>
                 </div>
                 <div class="brand-text">
@@ -228,7 +236,7 @@
                         <div id="chat-messages" class="chat-messages-container">
                             <div class="welcome-card glass-panel">
                                 <div class="welcome-logo-wrap">
-                                    <img src="/static/logo.png" alt="GENESIS AI 5.0" class="welcome-logo">
+                                    <img src="logo.png" alt="GENESIS AI 5.0" class="welcome-logo">
                                     <div class="welcome-halo"></div>
                                 </div>
                                 <h2>GENESIS AI 5.0 Cognitive Operating System</h2>
@@ -848,6 +856,6 @@ main();</code></pre>
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden"></div>
 
-    <script src="/static/app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

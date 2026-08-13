@@ -53,6 +53,38 @@ PUBLIC_DIR = BASE_DIR / "public"
 PUBLIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(PUBLIC_DIR)), name="static")
 
+@app.get("/style.css")
+async def get_style_css():
+    css_path = PUBLIC_DIR / "style.css"
+    if css_path.exists():
+        from fastapi.responses import Response
+        return Response(content=css_path.read_text(encoding="utf-8"), media_type="text/css")
+    return Response(content="", media_type="text/css")
+
+@app.get("/app.js")
+async def get_app_js():
+    js_path = PUBLIC_DIR / "app.js"
+    if js_path.exists():
+        from fastapi.responses import Response
+        return Response(content=js_path.read_text(encoding="utf-8"), media_type="application/javascript")
+    return Response(content="", media_type="application/javascript")
+
+@app.get("/logo.png")
+async def get_logo_png():
+    from fastapi.responses import FileResponse
+    logo_path = PUBLIC_DIR / "logo.png"
+    if logo_path.exists():
+        return FileResponse(str(logo_path), media_type="image/png")
+    return JSONResponse(status_code=404, content={"error": "logo not found"})
+
+@app.get("/ai_bg.jpg")
+async def get_ai_bg_jpg():
+    from fastapi.responses import FileResponse
+    bg_path = PUBLIC_DIR / "ai_bg.jpg"
+    if bg_path.exists():
+        return FileResponse(str(bg_path), media_type="image/jpeg")
+    return JSONResponse(status_code=404, content={"error": "bg not found"})
+
 # Request Models
 class ChatMessage(BaseModel):
     role: str
