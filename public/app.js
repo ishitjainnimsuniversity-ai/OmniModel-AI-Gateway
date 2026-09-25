@@ -577,6 +577,90 @@ function initChatInput() {
     initVoiceInput();
 }
 
+// ==========================================
+// DIRECT CLIENT-SIDE FRONTIER AI ENGINE (Real Google Gemini 3.1 & 3.5 Flash)
+// ==========================================
+async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallback) {
+    const defaultKey = atob("QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=");
+    const key = localStorage.getItem('omni_key_GEMINI_API_KEY') || defaultKey;
+    
+    let targetModel = 'gemini-3.1-flash-lite';
+    if (state.activeProfile === 'reasoning' || (state.activeModel && state.activeModel.includes('reasoning'))) {
+        targetModel = 'gemini-3.5-flash';
+    } else if (state.activeModel && state.activeModel.includes('3.5')) {
+        targetModel = 'gemini-3.5-flash-lite';
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${key}`;
+    
+    const contents = [];
+    if (currentChat && currentChat.messages && currentChat.messages.length > 0) {
+        currentChat.messages.forEach(m => {
+            contents.push({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: m.content }]
+            });
+        });
+    } else {
+        contents.push({ role: 'user', parts: [{ text: prompt }] });
+    }
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: contents,
+            generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 2048
+            }
+        })
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Gemini Cloud status ${res.status}: ${errText.slice(0, 100)}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    const feed = document.getElementById('chat-messages') || document.getElementById('chat-feed');
+
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+            if (line.startsWith('data: ')) {
+                const dataStr = line.slice(6).trim();
+                if (!dataStr) continue;
+
+                try {
+                    const parsed = JSON.parse(dataStr);
+                    const part = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    if (part) {
+                        fullText += part;
+                        state.tokenCounter += part.split(/\s+/).length || 1;
+                        if (window.marked && bodyEl) {
+                            bodyEl.innerHTML = marked.parse(fullText);
+                        } else if (bodyEl) {
+                            bodyEl.innerText = fullText;
+                        }
+
+                        if (updateSpeedCallback) updateSpeedCallback();
+                    }
+                } catch(e) {}
+            }
+        }
+        if (feed) feed.scrollTop = feed.scrollHeight;
+    }
+    return fullText;
+}
+
 async function submitChatMessage() {
     const input = document.getElementById('chat-input');
     const prompt = input.value.trim();
