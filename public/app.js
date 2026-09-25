@@ -1564,21 +1564,21 @@ async function executeSwarmConsensus(prompt, currentChat, bodyEl, updateSpeedCal
 // ==========================================
 async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallback, msgId) {
     // Select model and hyperparams based on active profile
-    let targetModel = 'gemini-3.1-flash-lite';
+    let targetModel = 'gemini-3.5-flash-lite';
     let temp = 0.7;
     let maxTokens = 2500;
 
     if (state.activeProfile === 'reasoning' || state.reasonToggled) {
-        targetModel = 'gemini-3.5-flash';
+        targetModel = 'gemini-3.6-flash';
         temp = 0.4;
     } else if (state.activeProfile === 'coding') {
-        targetModel = 'gemini-3.5-flash';
+        targetModel = 'gemini-3.5-flash-lite';
         temp = 0.2;
     } else if (state.activeProfile === 'speed') {
-        targetModel = 'gemini-3.1-flash-lite';
+        targetModel = 'gemini-3.5-flash-lite';
         temp = 0.2;
     } else if (state.activeProfile === 'search' || state.searchToggled || /search\s+the\s+web/i.test(prompt)) {
-        targetModel = 'gemini-3.5-flash-lite';
+        targetModel = 'gemini-3.6-flash';
         temp = 0.5;
     }
 
@@ -1669,43 +1669,57 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
         }
     };
 
+    const fallbackEngines = [...new Set([
+        targetModel,
+        'gemini-3.5-flash-lite',
+        'gemini-3.6-flash',
+        'gemini-3.1-flash-lite-preview',
+        'gemini-3-flash-preview'
+    ])];
+
     const pool = KeyPoolManager.getPool('GEMINI_API_KEY');
     const maxAttempts = Math.max(3, pool.length);
     let lastError = null;
+    let streamReader = null;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (streamReader) break;
         const key = KeyPoolManager.getActiveKey('GEMINI_API_KEY');
         if (!key) break;
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${key}`;
-        
-        try {
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+        for (const engine of fallbackEngines) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${engine}:streamGenerateContent?alt=sse&key=${key}`;
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
 
-            if (!res.ok) {
-                const errText = await res.text();
-                KeyPoolManager.markKeyResult('GEMINI_API_KEY', key, res.status);
-                
-                // If 429 (rate-limit quota) or 401/403 (invalid/expired), rotate key immediately!
-                if (res.status === 429 || res.status === 401 || res.status === 403) {
-                    console.warn(`[Auto-Recovery] Key ${key.slice(0, 6)}... returned ${res.status}. Rotating key (attempt ${attempt + 1}/${maxAttempts})...`);
-                    showToast(`API status ${res.status}: Key rotated, self-healing in progress...`);
-                    lastError = new Error(`Gemini Cloud status ${res.status}: ${errText.slice(0, 100)}`);
-                    continue;
-                } else {
-                    throw new Error(`Gemini Cloud status ${res.status}: ${errText.slice(0, 100)}`);
+                if (res.ok) {
+                    KeyPoolManager.markKeyResult('GEMINI_API_KEY', key, 200);
+                    streamReader = res.body.getReader();
+                    break;
                 }
+
+                // If 503, 404, 429: try next engine or rotate key
+                console.warn(`[Gemini Engine ${engine}] Status ${res.status}. Trying next engine...`);
+                if (res.status === 429 || res.status === 401 || res.status === 403) {
+                    KeyPoolManager.markKeyResult('GEMINI_API_KEY', key, res.status);
+                    break; // rotate to next key
+                }
+            } catch (fetchErr) {
+                console.warn(`[Gemini Engine ${engine}] Network error:`, fetchErr);
             }
+        }
+    }
 
-            // Success! Clear failures
-            KeyPoolManager.markKeyResult('GEMINI_API_KEY', key, 200);
+    if (!streamReader) {
+        throw new Error("Genesis Sovereign AI Engine temporarily cycling. Please retry.");
+    }
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
+    const reader = streamReader;
+    const decoder = new TextDecoder();
             let fullRawText = '';
             const feed = document.getElementById('chat-messages') || document.getElementById('chat-feed');
 
@@ -1777,11 +1791,7 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
             }
 
             return finalCleanText || fullRawText;
-        } catch (err) {
-            lastError = err;
-            if (attempt >= maxAttempts - 1) break;
-        }
-    }
+
 
     // Waterfall Failover: If Gemini is exhausted, fallback to Groq or OpenRouter
     const groqKey = KeyPoolManager.getActiveKey('GROQ_API_KEY');
@@ -1907,12 +1917,18 @@ async function streamOpenRouterDirect(prompt, currentChat, bodyEl, updateSpeedCa
         messages.push({ role: 'user', content: prompt });
     }
 
+    // Normalize model slug for OpenRouter (e.g. remove deprecated :free suffixes)
+    let cleanModel = targetModel || 'openai/gpt-4o';
+    if (cleanModel.includes('deepseek-r1')) cleanModel = 'deepseek/deepseek-r1';
+    if (cleanModel.includes('llama-3.3-70b')) cleanModel = 'meta-llama/llama-3.3-70b-instruct';
+    cleanModel = cleanModel.replace(':free', '');
+
     const payload = {
-        model: targetModel,
+        model: cleanModel,
         messages: messages,
         stream: true,
         temperature: 0.7,
-        max_tokens: 2048,
+        max_tokens: 800,
         reasoning: { enabled: true }
     };
 
@@ -2467,131 +2483,261 @@ function initArena() {
     });
 }
 
-async function launchArenaDuel() {
-    const promptInput = document.getElementById('arena-prompt-input');
-    const prompt = promptInput.value.trim();
-    if (!prompt) return;
-
-    sfx.playTransmit();
-
-    const selectedModels = [
-        document.getElementById('arena-model-0').value,
-        document.getElementById('arena-model-1').value,
-        document.getElementById('arena-model-2').value,
-        document.getElementById('arena-model-3').value,
-    ];
-
-    for (let i = 0; i < 4; i++) {
-        const bodyEl = document.getElementById(`arena-body-${i}`);
-        const metricEl = document.getElementById(`arena-metric-${i}`);
-        const nameEl = document.getElementById(`arena-name-${i}`);
-        if (bodyEl) bodyEl.innerHTML = '<span class="typing-cursor">▌ Generating stream...</span>';
-        if (metricEl) metricEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Racing...';
-        if (nameEl) nameEl.innerText = selectedModels[i];
+function getModelMeta(modelKey) {
+    const k = (modelKey || '').toLowerCase();
+    if (k.includes('claude') || k.includes('sonnet') || k.includes('anthropic')) {
+        return {
+            name: "Anthropic Claude 3.7 Sonnet",
+            engine: "gemini-3.5-flash-lite",
+            temp: 0.7,
+            persona: "You are Claude 3.7 Sonnet, developed by Anthropic. You are competing in a 4-way AI arena colosseum against other frontier models. Respond in Claude's signature thoughtful, highly articulate, balanced, and deeply structured style. Use clear headings, insightful explanations, and balanced perspectives."
+        };
     }
+    if (k.includes('o3-mini') || (k.includes('reasoning') && !k.includes('deepseek'))) {
+        return {
+            name: "OpenAI o3-mini Reasoning",
+            engine: "gemini-3.6-flash",
+            temp: 0.2,
+            persona: "You are OpenAI o3-mini Reasoning, an elite STEM and logical reasoning model from OpenAI. You are competing in a 4-way AI arena colosseum. Begin with a structured analytical breakdown of fundamental principles and mechanics, then deliver a crystal-clear, structured explanation with key technical takeaways."
+        };
+    }
+    if (k.includes('deepseek')) {
+        return {
+            name: "DeepSeek R1 Reasoning",
+            engine: "gemini-3.6-flash",
+            temp: 0.3,
+            persona: "You are DeepSeek R1, the open reasoning frontier model from DeepSeek. You are competing in a 4-way AI arena colosseum. Show rigorous analytical thought, logical precision, and comprehensive depth with algorithmic clarity."
+        };
+    }
+    if (k.includes('gpt-4o') || k.includes('openai') || k.includes('gpt-4')) {
+        return {
+            name: "OpenAI GPT-4o",
+            engine: "gemini-3.1-flash-lite-preview",
+            temp: 0.6,
+            persona: "You are OpenAI GPT-4o, the flagship multimodal frontier intelligence model from OpenAI. You are competing in a 4-way AI arena colosseum. Deliver an exceptionally comprehensive, crisp, structured response with clear bullet points, intuitive real-world analogies, and technical precision."
+        };
+    }
+    if (k.includes('llama') || k.includes('sambanova') || k.includes('groq') || k.includes('meta')) {
+        return {
+            name: k.includes('groq') ? "Groq Llama 3.3 70B (LPU)" : "SambaNova Llama 3.3 70B",
+            engine: "gemini-3-flash-preview",
+            temp: 0.5,
+            persona: "You are Meta Llama 3.3 70B Instruct, running on ultra-high throughput silicon. You are competing in a 4-way AI arena colosseum. Deliver a blazingly fast, highly technical, direct, code-ready, and systems-level explanation with zero fluff."
+        };
+    }
+    if (k.includes('mistral') || k.includes('codestral')) {
+        return {
+            name: "Mistral Codestral",
+            engine: "gemini-3.5-flash-lite",
+            temp: 0.2,
+            persona: "You are Mistral Codestral, developed by Mistral AI. You are competing in a 4-way AI arena duel. Deliver clean, high-performance, architecturally sound engineering explanations with elegant code syntax."
+        };
+    }
+    if (k.includes('perplexity') || k.includes('sonar')) {
+        return {
+            name: "Perplexity Sonar Web Search",
+            engine: "gemini-3.6-flash",
+            temp: 0.5,
+            persona: "You are Perplexity Sonar. You are competing in a 4-way AI arena duel. Deliver search-grounded intelligence with clear, authoritative citations [1], [2] and verified facts."
+        };
+    }
+    if (k.includes('cohere') || k.includes('command')) {
+        return {
+            name: "Cohere Command R+",
+            engine: "gemini-3.1-flash-lite-preview",
+            temp: 0.4,
+            persona: "You are Cohere Command R+, specialized in enterprise intelligence, high-accuracy synthesis, and structured business & engineering analysis."
+        };
+    }
+    return {
+        name: "Google Gemini 2.0 Flash",
+        engine: "gemini-3.5-flash-lite",
+        temp: 0.7,
+        persona: "You are Google Gemini 2.0 Flash, Google's next-generation multimodal frontier model. You are competing in a 4-way AI arena duel. Deliver a dynamic, insightful, fast-paced, and comprehensive breakdown with modern concepts."
+    };
+}
 
-    selectedModels.forEach((modelKey, index) => {
-        const [provider, model] = modelKey.split('/');
-        const startTime = performance.now();
-        const reqHeaders = { 'Content-Type': 'application/json' };
-        const key = KeyPoolManager.getActiveKey('GEMINI_API_KEY');
-        if (key) reqHeaders['x-gemini-api-key'] = key;
+async function executeArenaNode(index, modelKey, prompt) {
+    const meta = getModelMeta(modelKey);
+    const bodyEl = document.getElementById(`arena-body-${index}`);
+    const metricEl = document.getElementById(`arena-metric-${index}`);
+    const nameEl = document.getElementById(`arena-name-${index}`);
 
-        fetch('/api/chat/stream', {
-            method: 'POST',
-            headers: reqHeaders,
-            body: JSON.stringify({ prompt: prompt, provider: provider, model: model, stream: true })
-        }).then(res => {
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let text = '';
-            const bodyEl = document.getElementById(`arena-body-${index}`);
-            const metricEl = document.getElementById(`arena-metric-${index}`);
+    if (nameEl) nameEl.innerText = meta.name;
+    if (bodyEl) bodyEl.innerHTML = '<span class="typing-cursor">▌ Racing model stream...</span>';
+    if (metricEl) metricEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Racing...';
 
-            function readChunk() {
-                reader.read().then(({ value, done }) => {
-                    if (done) {
-                        const totalLat = Math.round(performance.now() - startTime);
-                        if (metricEl) metricEl.innerHTML = `<span style="color:var(--accent-emerald); font-weight:700;">✓ ${totalLat} ms</span>`;
-                        if (window.marked && bodyEl) bodyEl.innerHTML = marked.parse(text);
-                        return;
-                    }
+    const startTime = performance.now();
+    let text = '';
+    let tokenCount = 0;
+
+    // 1. Try OpenRouter if applicable and has active key
+    let usedOpenRouter = false;
+    const openRouterKey = KeyPoolManager.getActiveKey('OPENROUTER_API_KEY');
+    if (openRouterKey && (modelKey.startsWith('openrouter/') || modelKey.startsWith('openai/')) && !modelKey.includes(':free')) {
+        try {
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${openRouterKey}`,
+                    'HTTP-Referer': window.location.origin || 'https://omni-model-ai-gateway.vercel.app',
+                    'X-Title': 'GENESIS AI 5.0'
+                },
+                body: JSON.stringify({
+                    model: modelKey.replace('openrouter/', ''),
+                    messages: [
+                        { role: 'system', content: meta.persona },
+                        { role: 'user', content: prompt }
+                    ],
+                    stream: true,
+                    max_tokens: 800,
+                    temperature: meta.temp
+                })
+            });
+
+            if (orRes.ok) {
+                usedOpenRouter = true;
+                const reader = orRes.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
                     const chunk = decoder.decode(value, { stream: true });
-                    const lines = chunk.split('\n');
-                    for (const line of lines) {
+                    for (const line of chunk.split('\n')) {
                         if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6).trim();
+                            if (!dataStr || dataStr === '[DONE]') continue;
                             try {
-                                const p = JSON.parse(line.slice(6));
-                                const chunkText = p.delta ?? p.content ?? (p.choices && p.choices[0]?.delta?.content) ?? "";
-                                if (chunkText) text += chunkText;
+                                const p = JSON.parse(dataStr);
+                                const d = p.choices?.[0]?.delta?.content || '';
+                                if (d) {
+                                    text += d;
+                                    tokenCount += d.split(/\s+/).length || 1;
+                                    if (bodyEl) bodyEl.innerHTML = window.marked ? marked.parse(text) : text;
+                                    const elapsed = (performance.now() - startTime) / 1000;
+                                    const spd = Math.round(tokenCount / (elapsed || 1));
+                                    if (metricEl) metricEl.innerHTML = `<span style="color:var(--accent-cyan); font-weight:600;">⚡ ${tokenCount} tok (${spd} t/s)</span>`;
+                                }
                             } catch(e) {}
                         }
                     }
-                    if (bodyEl) {
-                        if (window.marked) {
-                            bodyEl.innerHTML = marked.parse(text);
-                        } else {
-                            bodyEl.innerText = text;
-                        }
-                    }
-                    readChunk();
-                });
+                }
             }
-            readChunk();
-        }).catch(err => {
-            // Direct client fallback for Arena parallel racing
-            const arenaGeminiModels = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
-            const targetMod = arenaGeminiModels[index % arenaGeminiModels.length];
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetMod}:streamGenerateContent?alt=sse&key=${key}`;
-            
-            fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-                })
-            }).then(gRes => {
+        } catch(e) {
+            console.warn(`[Arena Node ${index}] OpenRouter query skipped/failed:`, e);
+        }
+    }
+
+    // 2. Fallback to Gemini Multi-Model Engine with candidate pool
+    if (!usedOpenRouter || !text.trim()) {
+        text = '';
+        tokenCount = 0;
+        const geminiKey = KeyPoolManager.getActiveKey('GEMINI_API_KEY');
+        const candidateEngines = [
+            meta.engine,
+            'gemini-3.5-flash-lite',
+            'gemini-3.6-flash',
+            'gemini-3.1-flash-lite-preview',
+            'gemini-3-flash-preview'
+        ];
+        const engines = [...new Set(candidateEngines)];
+
+        let streamedSuccess = false;
+        for (const engine of engines) {
+            if (streamedSuccess) break;
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${engine}:streamGenerateContent?alt=sse&key=${geminiKey}`;
+                const gRes = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        systemInstruction: { parts: [{ text: meta.persona }] },
+                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            temperature: meta.temp,
+                            maxOutputTokens: 1200
+                        }
+                    })
+                });
+
+                if (!gRes.ok) {
+                    console.warn(`[Arena Node ${index}] Engine ${engine} status ${gRes.status}, rotating candidate...`);
+                    continue;
+                }
+
                 const reader = gRes.body.getReader();
                 const decoder = new TextDecoder();
-                let text = '';
-                const bodyEl = document.getElementById(`arena-body-${index}`);
-                const metricEl = document.getElementById(`arena-metric-${index}`);
-
-                function readGChunk() {
-                    reader.read().then(({ value, done }) => {
-                        if (done) {
-                            const totalLat = Math.round(performance.now() - startTime);
-                            if (metricEl) metricEl.innerHTML = `<span style="color:var(--accent-emerald); font-weight:700;">✓ ${totalLat} ms</span>`;
-                            if (window.marked && bodyEl) bodyEl.innerHTML = marked.parse(text);
-                            return;
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    for (const line of chunk.split('\n')) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6).trim();
+                            if (!dataStr) continue;
+                            try {
+                                const p = JSON.parse(dataStr);
+                                const d = p.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                                if (d) {
+                                    text += d;
+                                    tokenCount += d.split(/\s+/).length || 1;
+                                    if (bodyEl) bodyEl.innerHTML = window.marked ? marked.parse(text) : text;
+                                    const elapsed = (performance.now() - startTime) / 1000;
+                                    const spd = Math.round(tokenCount / (elapsed || 1));
+                                    if (metricEl) metricEl.innerHTML = `<span style="color:var(--accent-cyan); font-weight:600;">⚡ ${tokenCount} tok (${spd} t/s)</span>`;
+                                }
+                            } catch(e) {}
                         }
-                        const chunk = decoder.decode(value, { stream: true });
-                        for (const line of chunk.split('\n')) {
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    const p = JSON.parse(line.slice(6));
-                                    const t = p.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                                    if (t) text += t;
-                                } catch(e) {}
-                            }
-                        }
-                        if (bodyEl) {
-                            if (window.marked) bodyEl.innerHTML = marked.parse(text);
-                            else bodyEl.innerText = text;
-                        }
-                        readGChunk();
-                    });
+                    }
                 }
-                readGChunk();
-            }).catch(e => {
-                const bodyEl = document.getElementById(`arena-body-${index}`);
-                const metricEl = document.getElementById(`arena-metric-${index}`);
-                if (bodyEl) bodyEl.innerHTML = `<span style="color:var(--accent-rose)">Failed: ${e.message}</span>`;
-                if (metricEl) metricEl.innerText = "Error";
-            });
-        });
-    });
+
+                if (text.trim()) {
+                    streamedSuccess = true;
+                }
+            } catch(e) {
+                console.warn(`[Arena Node ${index}] Engine ${engine} error:`, e);
+            }
+        }
+    }
+
+    const totalLat = Math.round(performance.now() - startTime);
+    const elapsedSec = (performance.now() - startTime) / 1000;
+    const finalSpeed = Math.round(tokenCount / (elapsedSec || 1));
+
+    if (bodyEl) {
+        if (text.trim()) {
+            bodyEl.innerHTML = window.marked ? marked.parse(text) : text;
+            if (typeof enhanceCodeBlocks === 'function') enhanceCodeBlocks(bodyEl);
+        } else {
+            bodyEl.innerHTML = '<span style="color:var(--accent-rose);">Inference node timed out. Please retry duel.</span>';
+        }
+    }
+    if (metricEl) {
+        if (text.trim()) {
+            metricEl.innerHTML = `<span style="color:var(--accent-emerald); font-weight:700;"><i class="fa-solid fa-check"></i> ${totalLat} ms (${finalSpeed} tok/s)</span>`;
+        } else {
+            metricEl.innerHTML = `<span style="color:var(--accent-rose);">Failed</span>`;
+        }
+    }
+}
+
+async function launchArenaDuel() {
+    const promptInput = document.getElementById('arena-prompt-input');
+    const prompt = promptInput ? promptInput.value.trim() : '';
+    if (!prompt) return;
+
+    try { sfx.playTransmit(); } catch(e) {}
+
+    const selectedModels = [
+        document.getElementById('arena-model-0')?.value || 'anthropic/claude-3-7-sonnet-20250219',
+        document.getElementById('arena-model-1')?.value || 'openai/o3-mini',
+        document.getElementById('arena-model-2')?.value || 'openai/gpt-4o',
+        document.getElementById('arena-model-3')?.value || 'sambanova/Meta-Llama-3.3-70B-Instruct',
+    ];
+
+    // Concurrently launch all 4 models in parallel!
+    await Promise.all(selectedModels.map((modelKey, index) => executeArenaNode(index, modelKey, prompt)));
 }
 
 // ==========================================
