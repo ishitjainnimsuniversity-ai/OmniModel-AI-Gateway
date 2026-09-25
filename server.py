@@ -50,7 +50,10 @@ app.add_middleware(
 
 # Mount static files
 PUBLIC_DIR = BASE_DIR / "public"
-PUBLIC_DIR.mkdir(exist_ok=True)
+try:
+    PUBLIC_DIR.mkdir(exist_ok=True)
+except Exception:
+    pass
 app.mount("/static", StaticFiles(directory=str(PUBLIC_DIR)), name="static")
 
 @app.get("/style.css")

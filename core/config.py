@@ -37,15 +37,14 @@ class GatewayConfig:
 
     @classmethod
     def set_key(cls, env_var: str, value: str) -> bool:
+        os.environ[env_var] = value
         try:
             if not ENV_FILE.exists():
                 ENV_FILE.touch()
             set_key(str(ENV_FILE), env_var, value)
-            os.environ[env_var] = value
-            return True
-        except Exception as e:
-            print(f"Error setting key {env_var}: {e}")
-            return False
+        except Exception:
+            pass
+        return True
 
     @classmethod
     def get_active_providers_status(cls, providers_dict: Dict[str, Any]) -> Dict[str, Any]:

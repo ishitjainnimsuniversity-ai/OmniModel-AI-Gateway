@@ -10,9 +10,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from collections import Counter
+import tempfile
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-DATA_DIR.mkdir(exist_ok=True)
+try:
+    DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+    DATA_DIR.mkdir(exist_ok=True)
+except Exception:
+    DATA_DIR = Path(tempfile.gettempdir()) / "omnimodel_data"
+    DATA_DIR.mkdir(exist_ok=True)
+
 ANALYTICS_FILE = DATA_DIR / "analytics.json"
 
 class AnalyticsTracker:

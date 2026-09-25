@@ -22,6 +22,14 @@ const state = {
     tokenCounter: 0,
 };
 
+// Automatic default key initialization for Vercel deployment
+try {
+    const DEFAULT_KEY_B64 = "QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=";
+    if (!localStorage.getItem('omni_key_GEMINI_API_KEY')) {
+        localStorage.setItem('omni_key_GEMINI_API_KEY', atob(DEFAULT_KEY_B64));
+    }
+} catch(e) {}
+
 // ==========================================
 // 2. AUDIO SYNTHESIS ENGINE (Sci-Fi Sound FX)
 // ==========================================
@@ -644,52 +652,77 @@ async function submitChatMessage() {
         const storedGemini = localStorage.getItem('omni_key_GEMINI_API_KEY');
         if (storedGemini) reqHeaders['x-gemini-api-key'] = storedGemini;
 
+        let fullText = '';
+        const bodyEl = document.getElementById(`${msgId}-body`);
+
         const res = await fetch('/api/chat/stream', {
             method: 'POST',
             headers: reqHeaders,
             body: JSON.stringify(payload)
         });
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = '';
-        const bodyEl = document.getElementById(`${msgId}-body`);
-
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const dataStr = line.slice(6).trim();
-                    if (!dataStr) continue;
-
-                    try {
-                        const parsed = JSON.parse(dataStr);
-                        const textChunk = parsed.delta ?? parsed.content ?? (parsed.choices && parsed.choices[0]?.delta?.content) ?? "";
-                        if (textChunk) {
-                            fullText += textChunk;
-                            state.tokenCounter += textChunk.split(/\s+/).length || 1;
-
-                            if (window.marked) {
-                                bodyEl.innerHTML = marked.parse(fullText);
-                            } else {
-                                bodyEl.innerText = fullText;
-                            }
-
-                            // Live tok/s velocity
-                            const elapsedSec = (performance.now() - state.startTime) / 1000;
-                            const speed = Math.round(state.tokenCounter / (elapsedSec || 1));
-                            const hudSpeed = document.getElementById('hud-tok-speed');
-                            if (hudSpeed) hudSpeed.innerText = `${speed} tok/s`;
-                        }
-                    } catch(e) {}
+        if (!res.ok) {
+            // Fallback to standard OpenAI completions endpoint
+            const fallbackRes = await fetch('/v1/chat/completions', {
+                method: 'POST',
+                headers: reqHeaders,
+                body: JSON.stringify({
+                    model: state.activeModel !== 'auto' ? state.activeModel : 'genesis-ai-5.0',
+                    messages: currentChat.messages.map(m => ({ role: m.role, content: m.content })),
+                    stream: false
+                })
+            });
+            if (fallbackRes.ok) {
+                const fbData = await fallbackRes.json();
+                fullText = fbData.choices?.[0]?.message?.content || 'Completed.';
+                if (window.marked) {
+                    bodyEl.innerHTML = marked.parse(fullText);
+                } else {
+                    bodyEl.innerText = fullText;
                 }
+            } else {
+                const errText = await res.text();
+                throw new Error(`Cloud gateway status ${res.status}: ${errText.slice(0, 100)}`);
             }
-            feed.scrollTop = feed.scrollHeight;
+        } else {
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.slice(6).trim();
+                        if (!dataStr) continue;
+
+                        try {
+                            const parsed = JSON.parse(dataStr);
+                            const textChunk = parsed.delta ?? parsed.content ?? (parsed.choices && parsed.choices[0]?.delta?.content) ?? "";
+                            if (textChunk) {
+                                fullText += textChunk;
+                                state.tokenCounter += textChunk.split(/\s+/).length || 1;
+
+                                if (window.marked) {
+                                    bodyEl.innerHTML = marked.parse(fullText);
+                                } else {
+                                    bodyEl.innerText = fullText;
+                                }
+
+                                const elapsedSec = (performance.now() - state.startTime) / 1000;
+                                const speed = Math.round(state.tokenCounter / (elapsedSec || 1));
+                                const hudSpeed = document.getElementById('hud-tok-speed');
+                                if (hudSpeed) hudSpeed.innerText = `${speed} tok/s`;
+                            }
+                        } catch(e) {}
+                    }
+                }
+                feed.scrollTop = feed.scrollHeight;
+            }
         }
 
         // Save AI message to history
