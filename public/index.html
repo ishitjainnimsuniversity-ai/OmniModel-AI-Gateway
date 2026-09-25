@@ -856,9 +856,22 @@ main();</code></pre>
                 <p id="modal-provider-desc"></p>
                 <div class="modal-field">
                     <label id="modal-env-label">Environment Variable</label>
-                    <input type="password" id="modal-key-input" placeholder="Paste your API key here..." autocomplete="off">
+                    <textarea id="modal-key-input" placeholder="Paste 1 or more API keys (one per line or comma-separated) for automatic rotation..." rows="3" style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:#fff; padding:10px 12px; font-family:monospace; font-size:12px; resize:vertical; outline:none;"></textarea>
                 </div>
-                <div class="modal-help">
+                
+                <div class="key-pool-indicator" style="margin-top:12px; padding:10px 14px; background:rgba(0,255,180,0.06); border:1px solid rgba(0,255,180,0.2); border-radius:8px; font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="color:var(--accent-emerald); font-weight:600;"><i class="fa-solid fa-shield-halved"></i> Self-Healing Multi-Key Rotation</span>
+                        <span id="modal-pool-count" class="badge-mini" style="background:var(--accent-emerald); color:#000; font-weight:700;">Active</span>
+                    </div>
+                    <p style="margin:0; font-size:11px; color:var(--text-muted); line-height:1.4;">
+                        ✓ <strong>Auto-Failover:</strong> If a key hits 429 quota or expires, it immediately rotates to backup keys.<br>
+                        ✓ <strong>Auto-Recovery:</strong> Rate-limited keys automatically re-activate after their 60s cooldown window.<br>
+                        ✓ <strong>Waterfall:</strong> Seamlessly falls over to secondary free providers if all keys are busy.
+                    </p>
+                </div>
+
+                <div class="modal-help" style="margin-top:12px;">
                     <a id="modal-key-link" href="#" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i> Get Free / Account API Key</a>
                 </div>
             </div>

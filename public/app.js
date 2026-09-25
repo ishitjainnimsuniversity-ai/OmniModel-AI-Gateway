@@ -22,14 +22,172 @@ const state = {
     tokenCounter: 0,
 };
 
-// Automatic default key initialization for Vercel deployment
-try {
-    const DEFAULT_KEY_B64 = "QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=";
-    const existing = localStorage.getItem('omni_key_GEMINI_API_KEY');
-    if (!existing || !existing.startsWith('AQ.')) {
-        localStorage.setItem('omni_key_GEMINI_API_KEY', atob(DEFAULT_KEY_B64));
+// ==========================================
+// 1.1 SELF-HEALING KEY POOL & CIRCUIT BREAKER MANAGER
+// ==========================================
+class KeyPoolManager {
+    static get DEFAULT_GEMINI_KEY() {
+        try {
+            return atob("QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=");
+        } catch(e) {
+            return "";
+        }
     }
+
+    static getPool(envKey) {
+        try {
+            const raw = localStorage.getItem(`omni_pool_${envKey}`);
+            if (raw) {
+                const pool = JSON.parse(raw);
+                if (Array.isArray(pool) && pool.length > 0) return pool;
+            }
+        } catch(e) {}
+
+        const legacy = localStorage.getItem(`omni_key_${envKey}`);
+        const defaultList = [];
+        if (legacy && legacy.trim()) {
+            defaultList.push({ key: legacy.trim(), cooldownUntil: 0, failures: 0, lastSuccess: Date.now() });
+        } else if (envKey === 'GEMINI_API_KEY') {
+            defaultList.push({ key: this.DEFAULT_GEMINI_KEY, cooldownUntil: 0, failures: 0, lastSuccess: Date.now() });
+        }
+        return defaultList;
+    }
+
+    static savePool(envKey, pool) {
+        try {
+            localStorage.setItem(`omni_pool_${envKey}`, JSON.stringify(pool));
+            if (pool.length > 0) {
+                localStorage.setItem(`omni_key_${envKey}`, pool[0].key);
+            }
+        } catch(e) {}
+    }
+
+    static setKeysFromText(envKey, text) {
+        if (!text || !text.trim()) {
+            this.savePool(envKey, []);
+            return [];
+        }
+        const rawKeys = text
+            .split(/[\n,;]+/)
+            .map(k => k.trim())
+            .filter(k => k.length > 0);
+
+        const currentPool = this.getPool(envKey);
+        const map = new Map();
+        currentPool.forEach(item => map.set(item.key, item));
+
+        const newPool = [];
+        for (const k of rawKeys) {
+            if (map.has(k)) {
+                newPool.push(map.get(k));
+            } else {
+                newPool.push({
+                    key: k,
+                    cooldownUntil: 0,
+                    failures: 0,
+                    lastSuccess: 0
+                });
+            }
+        }
+
+        if (newPool.length === 0 && envKey === 'GEMINI_API_KEY') {
+            newPool.push({
+                key: this.DEFAULT_GEMINI_KEY,
+                cooldownUntil: 0,
+                failures: 0,
+                lastSuccess: Date.now()
+            });
+        }
+
+        this.savePool(envKey, newPool);
+        return newPool;
+    }
+
+    static getPoolText(envKey) {
+        const pool = this.getPool(envKey);
+        return pool.map(item => item.key).join('\n');
+    }
+
+    /**
+     * Retrieves an active key. Auto-heals: automatically clears cooldown once 60s has passed!
+     */
+    static getActiveKey(envKey) {
+        const now = Date.now();
+        let pool = this.getPool(envKey);
+
+        if (pool.length === 0 && envKey === 'GEMINI_API_KEY') {
+            pool = [{ key: this.DEFAULT_GEMINI_KEY, cooldownUntil: 0, failures: 0, lastSuccess: now }];
+            this.savePool(envKey, pool);
+        }
+
+        if (pool.length === 0) return null;
+
+        // Auto-heal expired cooldowns (Rate limit quota resets!)
+        let modified = false;
+        for (const item of pool) {
+            if (item.cooldownUntil > 0 && now >= item.cooldownUntil) {
+                console.log(`[KeyPoolManager] Key auto-recovered from cooldown: ${item.key.slice(0, 6)}...`);
+                item.cooldownUntil = 0;
+                item.failures = 0;
+                modified = true;
+            }
+        }
+        if (modified) {
+            this.savePool(envKey, pool);
+        }
+
+        // Return ready key (prioritizing least recently used)
+        const readyKeys = pool.filter(item => item.cooldownUntil === 0);
+        if (readyKeys.length > 0) {
+            readyKeys.sort((a, b) => (a.lastSuccess || 0) - (b.lastSuccess || 0));
+            return readyKeys[0].key;
+        }
+
+        // All keys in cooldown -> pick key with earliest recovery
+        pool.sort((a, b) => a.cooldownUntil - b.cooldownUntil);
+        return pool[0].key;
+    }
+
+    static markKeyResult(envKey, key, statusCode) {
+        const pool = this.getPool(envKey);
+        const item = pool.find(i => i.key === key);
+        if (!item) return;
+
+        const now = Date.now();
+        if (statusCode >= 200 && statusCode < 300) {
+            item.failures = 0;
+            item.cooldownUntil = 0;
+            item.lastSuccess = now;
+        } else if (statusCode === 429) {
+            // Rolling quota rate-limit exhausted -> 60s cooldown, then auto-heals
+            item.failures = (item.failures || 0) + 1;
+            const cooldownSec = Math.min(300, 60 * Math.pow(1.5, item.failures - 1));
+            item.cooldownUntil = now + (cooldownSec * 1000);
+            console.warn(`[KeyPoolManager] 429 Rate limit on ${envKey}. Cooldown for ${cooldownSec}s.`);
+        } else if (statusCode === 401 || statusCode === 403) {
+            // Bad credentials or expired key -> 30-min cooldown
+            item.failures = (item.failures || 0) + 1;
+            item.cooldownUntil = now + (30 * 60 * 1000);
+            console.warn(`[KeyPoolManager] 401/403 Invalid key on ${envKey}. Disabled for 30m.`);
+        }
+        this.savePool(envKey, pool);
+    }
+
+    static getStatusSummary(envKey) {
+        const now = Date.now();
+        const pool = this.getPool(envKey);
+        const active = pool.filter(i => !i.cooldownUntil || now >= i.cooldownUntil).length;
+        const cooldown = pool.length - active;
+        return { total: pool.length, active, cooldown };
+    }
+}
+window.KeyPoolManager = KeyPoolManager;
+
+// Initial bootstrap of default Gemini key
+try {
+    KeyPoolManager.getActiveKey('GEMINI_API_KEY');
 } catch(e) {}
+
 
 // ==========================================
 // 2. AUDIO SYNTHESIS ENGINE (Sci-Fi Sound FX)
@@ -582,9 +740,6 @@ function initChatInput() {
 // DIRECT CLIENT-SIDE FRONTIER AI ENGINE (GENESIS AI 5.0 Universal Engine)
 // ==========================================
 async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallback, msgId) {
-    const defaultKey = atob("QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=");
-    const key = localStorage.getItem('omni_key_GEMINI_API_KEY') || defaultKey;
-    
     // Select model and hyperparams based on active profile
     let targetModel = 'gemini-3.1-flash-lite';
     let temp = 0.7;
@@ -625,8 +780,6 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
         sysText += "\n\n[ULTRA-SPEED MODE]: Be extremely direct, concise, and immediate.";
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${key}`;
-    
     // Map conversation messages
     const contents = [];
     if (currentChat && currentChat.messages && currentChat.messages.length > 0) {
@@ -654,25 +807,157 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
         }
     };
 
-    const res = await fetch(url, {
+    const pool = KeyPoolManager.getPool('GEMINI_API_KEY');
+    const maxAttempts = Math.max(3, pool.length);
+    let lastError = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const key = KeyPoolManager.getActiveKey('GEMINI_API_KEY');
+        if (!key) break;
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${key}`;
+        
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                KeyPoolManager.markKeyResult('GEMINI_API_KEY', key, res.status);
+                
+                // If 429 (rate-limit quota) or 401/403 (invalid/expired), rotate key immediately!
+                if (res.status === 429 || res.status === 401 || res.status === 403) {
+                    console.warn(`[Auto-Recovery] Key ${key.slice(0, 6)}... returned ${res.status}. Rotating key (attempt ${attempt + 1}/${maxAttempts})...`);
+                    showToast(`API status ${res.status}: Key rotated, self-healing in progress...`);
+                    lastError = new Error(`Gemini Cloud status ${res.status}: ${errText.slice(0, 100)}`);
+                    continue;
+                } else {
+                    throw new Error(`Gemini Cloud status ${res.status}: ${errText.slice(0, 100)}`);
+                }
+            }
+
+            // Success! Clear failures
+            KeyPoolManager.markKeyResult('GEMINI_API_KEY', key, 200);
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let fullRawText = '';
+            const feed = document.getElementById('chat-messages') || document.getElementById('chat-feed');
+
+            const thoughtEl = msgId ? document.getElementById(`${msgId}-thought`) : null;
+            const thoughtBody = msgId ? document.getElementById(`${msgId}-thought-body`) : null;
+            const thoughtTitle = msgId ? document.querySelector(`#${msgId}-thought .thought-header span`) : null;
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.slice(6).trim();
+                        if (!dataStr) continue;
+
+                        try {
+                            const parsed = JSON.parse(dataStr);
+                            const part = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                            if (part) {
+                                fullRawText += part;
+                                state.tokenCounter += part.split(/\s+/).length || 1;
+
+                                // Check for <thought> tags
+                                if (fullRawText.includes('<thought>')) {
+                                    if (thoughtEl) thoughtEl.classList.remove('hidden');
+
+                                    if (fullRawText.includes('</thought>')) {
+                                        const parts = fullRawText.split('</thought>');
+                                        const thoughtText = parts[0].replace('<thought>', '').trim();
+                                        const answerText = parts.slice(1).join('</thought>').trim();
+
+                                        if (thoughtBody) thoughtBody.innerText = thoughtText;
+                                        if (thoughtTitle) thoughtTitle.innerText = "Cognitive Reasoning (Completed)";
+                                        if (bodyEl) {
+                                            bodyEl.innerHTML = window.marked ? marked.parse(answerText) : answerText;
+                                        }
+                                    } else {
+                                        const thoughtText = fullRawText.replace('<thought>', '').trim();
+                                        if (thoughtBody) thoughtBody.innerText = thoughtText;
+                                        if (thoughtTitle) thoughtTitle.innerText = "Analyzing & Reasoning...";
+                                        if (bodyEl) {
+                                            bodyEl.innerHTML = '<span class="typing-cursor">▌ Synthesizing solution...</span>';
+                                        }
+                                    }
+                                } else {
+                                    if (bodyEl) {
+                                        bodyEl.innerHTML = window.marked ? marked.parse(fullRawText) : fullRawText;
+                                    }
+                                }
+
+                                if (updateSpeedCallback) updateSpeedCallback();
+                            }
+                        } catch(e) {}
+                    }
+                }
+                if (feed) feed.scrollTop = feed.scrollHeight;
+            }
+
+            let finalCleanText = fullRawText;
+            if (fullRawText.includes('</thought>')) {
+                finalCleanText = fullRawText.split('</thought>').slice(1).join('</thought>').trim();
+            }
+
+            return finalCleanText || fullRawText;
+        } catch (err) {
+            lastError = err;
+            if (attempt >= maxAttempts - 1) break;
+        }
+    }
+
+    // Waterfall Failover: If Gemini is exhausted, fallback to Groq or OpenRouter
+    const groqKey = KeyPoolManager.getActiveKey('GROQ_API_KEY');
+    if (groqKey) {
+        showToast("Gemini quota reached. Seamlessly routing to Groq LPU...");
+        return await streamGroqDirect(prompt, currentChat, bodyEl, updateSpeedCallback);
+    }
+
+    const openRouterKey = KeyPoolManager.getActiveKey('OPENROUTER_API_KEY');
+    if (openRouterKey) {
+        showToast("Routing to OpenRouter Free Gateway...");
+        return await streamOpenRouterDirect(prompt, currentChat, bodyEl, updateSpeedCallback);
+    }
+
+    throw lastError || new Error("All API keys and provider failovers exhausted.");
+}
+
+async function streamOpenAICompatibleDirect(endpoint, apiKey, model, messages, bodyEl, updateSpeedCallback) {
+    const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: messages,
+            stream: true,
+            temperature: 0.7
+        })
     });
 
     if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini Cloud status ${res.status}: ${errText.slice(0, 100)}`);
+        const err = await res.text();
+        throw new Error(`Status ${res.status}: ${err.slice(0, 100)}`);
     }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let fullRawText = '';
+    let fullText = '';
     const feed = document.getElementById('chat-messages') || document.getElementById('chat-feed');
-
-    const thoughtEl = msgId ? document.getElementById(`${msgId}-thought`) : null;
-    const thoughtBody = msgId ? document.getElementById(`${msgId}-thought-body`) : null;
-    const thoughtTitle = msgId ? document.querySelector(`#${msgId}-thought .thought-header span`) : null;
 
     while (true) {
         const { value, done } = await reader.read();
@@ -684,43 +969,17 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
         for (const line of lines) {
             if (line.startsWith('data: ')) {
                 const dataStr = line.slice(6).trim();
-                if (!dataStr) continue;
+                if (!dataStr || dataStr === '[DONE]') continue;
 
                 try {
                     const parsed = JSON.parse(dataStr);
-                    const part = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                    if (part) {
-                        fullRawText += part;
-                        state.tokenCounter += part.split(/\s+/).length || 1;
-
-                        // Check for <thought> tags
-                        if (fullRawText.includes('<thought>')) {
-                            if (thoughtEl) thoughtEl.classList.remove('hidden');
-
-                            if (fullRawText.includes('</thought>')) {
-                                const parts = fullRawText.split('</thought>');
-                                const thoughtText = parts[0].replace('<thought>', '').trim();
-                                const answerText = parts.slice(1).join('</thought>').trim();
-
-                                if (thoughtBody) thoughtBody.innerText = thoughtText;
-                                if (thoughtTitle) thoughtTitle.innerText = "Cognitive Reasoning (Completed)";
-                                if (bodyEl) {
-                                    bodyEl.innerHTML = window.marked ? marked.parse(answerText) : answerText;
-                                }
-                            } else {
-                                const thoughtText = fullRawText.replace('<thought>', '').trim();
-                                if (thoughtBody) thoughtBody.innerText = thoughtText;
-                                if (thoughtTitle) thoughtTitle.innerText = "Analyzing & Reasoning...";
-                                if (bodyEl) {
-                                    bodyEl.innerHTML = '<span class="typing-cursor">▌ Synthesizing solution...</span>';
-                                }
-                            }
-                        } else {
-                            if (bodyEl) {
-                                bodyEl.innerHTML = window.marked ? marked.parse(fullRawText) : fullRawText;
-                            }
+                    const delta = parsed.choices?.[0]?.delta?.content || '';
+                    if (delta) {
+                        fullText += delta;
+                        state.tokenCounter += delta.split(/\s+/).length || 1;
+                        if (bodyEl) {
+                            bodyEl.innerHTML = window.marked ? marked.parse(fullText) : fullText;
                         }
-
                         if (updateSpeedCallback) updateSpeedCallback();
                     }
                 } catch(e) {}
@@ -728,13 +987,37 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
         }
         if (feed) feed.scrollTop = feed.scrollHeight;
     }
+    return fullText;
+}
 
-    let finalCleanText = fullRawText;
-    if (fullRawText.includes('</thought>')) {
-        finalCleanText = fullRawText.split('</thought>').slice(1).join('</thought>').trim();
-    }
+async function streamGroqDirect(prompt, currentChat, bodyEl, updateSpeedCallback) {
+    const groqKey = KeyPoolManager.getActiveKey('GROQ_API_KEY');
+    const messages = currentChat && currentChat.messages && currentChat.messages.length > 0
+        ? currentChat.messages.map(m => ({ role: m.role, content: m.content.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim() }))
+        : [{ role: 'user', content: prompt }];
+    return await streamOpenAICompatibleDirect(
+        'https://api.groq.com/openai/v1/chat/completions',
+        groqKey,
+        'llama-3.3-70b-versatile',
+        messages,
+        bodyEl,
+        updateSpeedCallback
+    );
+}
 
-    return finalCleanText || fullRawText;
+async function streamOpenRouterDirect(prompt, currentChat, bodyEl, updateSpeedCallback) {
+    const openRouterKey = KeyPoolManager.getActiveKey('OPENROUTER_API_KEY');
+    const messages = currentChat && currentChat.messages && currentChat.messages.length > 0
+        ? currentChat.messages.map(m => ({ role: m.role, content: m.content.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim() }))
+        : [{ role: 'user', content: prompt }];
+    return await streamOpenAICompatibleDirect(
+        'https://openrouter.ai/api/v1/chat/completions',
+        openRouterKey,
+        'deepseek/deepseek-r1:free',
+        messages,
+        bodyEl,
+        updateSpeedCallback
+    );
 }
 
 // Enhance code snippets with language badges and interactive Copy button
@@ -848,8 +1131,8 @@ async function submitChatMessage() {
         };
 
         const reqHeaders = { 'Content-Type': 'application/json' };
-        const storedGemini = localStorage.getItem('omni_key_GEMINI_API_KEY');
-        if (storedGemini) reqHeaders['x-gemini-api-key'] = storedGemini;
+        const activeGeminiKey = KeyPoolManager.getActiveKey('GEMINI_API_KEY');
+        if (activeGeminiKey) reqHeaders['x-gemini-api-key'] = activeGeminiKey;
 
         let fullText = '';
         const bodyEl = document.getElementById(`${msgId}-body`);
@@ -1076,8 +1359,8 @@ async function launchArenaDuel() {
         const [provider, model] = modelKey.split('/');
         const startTime = performance.now();
         const reqHeaders = { 'Content-Type': 'application/json' };
-        const storedGemini = localStorage.getItem('omni_key_GEMINI_API_KEY');
-        if (storedGemini) reqHeaders['x-gemini-api-key'] = storedGemini;
+        const key = KeyPoolManager.getActiveKey('GEMINI_API_KEY');
+        if (key) reqHeaders['x-gemini-api-key'] = key;
 
         fetch('/api/chat/stream', {
             method: 'POST',
@@ -1122,8 +1405,6 @@ async function launchArenaDuel() {
             readChunk();
         }).catch(err => {
             // Direct client fallback for Arena parallel racing
-            const defaultKey = atob("QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=");
-            const key = localStorage.getItem('omni_key_GEMINI_API_KEY') || defaultKey;
             const arenaGeminiModels = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
             const targetMod = arenaGeminiModels[index % arenaGeminiModels.length];
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetMod}:streamGenerateContent?alt=sse&key=${key}`;
@@ -1211,8 +1492,8 @@ async function loadProviders() {
                 id: 'groq',
                 name: 'Groq LPU Accelerator',
                 category: 'Ultra-Fast Inference',
-                configured: !!localStorage.getItem('omni_key_GROQ_API_KEY'),
-                has_key: !!localStorage.getItem('omni_key_GROQ_API_KEY'),
+                configured: KeyPoolManager.getPool('GROQ_API_KEY').length > 0,
+                has_key: KeyPoolManager.getPool('GROQ_API_KEY').length > 0,
                 env_var: 'GROQ_API_KEY',
                 free_key_url: 'https://console.groq.com/keys',
                 notes: 'Sub-100ms ultra low latency inference for Llama 3.3 70B & Mixtral.',
@@ -1222,8 +1503,8 @@ async function loadProviders() {
                 id: 'openrouter',
                 name: 'OpenRouter Free Tier',
                 category: 'Multi-Model Aggregator',
-                configured: !!localStorage.getItem('omni_key_OPENROUTER_API_KEY'),
-                has_key: !!localStorage.getItem('omni_key_OPENROUTER_API_KEY'),
+                configured: KeyPoolManager.getPool('OPENROUTER_API_KEY').length > 0,
+                has_key: KeyPoolManager.getPool('OPENROUTER_API_KEY').length > 0,
                 env_var: 'OPENROUTER_API_KEY',
                 free_key_url: 'https://openrouter.ai/keys',
                 notes: 'Access dozens of free open-source frontier models via one unified API.',
@@ -1233,8 +1514,8 @@ async function loadProviders() {
                 id: 'huggingface',
                 name: 'Hugging Face Inference',
                 category: 'Open Source Hub',
-                configured: !!localStorage.getItem('omni_key_HUGGINGFACE_API_KEY'),
-                has_key: !!localStorage.getItem('omni_key_HUGGINGFACE_API_KEY'),
+                configured: KeyPoolManager.getPool('HUGGINGFACE_API_KEY').length > 0,
+                has_key: KeyPoolManager.getPool('HUGGINGFACE_API_KEY').length > 0,
                 env_var: 'HUGGINGFACE_API_KEY',
                 free_key_url: 'https://huggingface.co/settings/tokens',
                 notes: 'Free serverless inference for thousands of open-source models.',
@@ -1244,8 +1525,8 @@ async function loadProviders() {
                 id: 'cerebras',
                 name: 'Cerebras Cloud CS-3',
                 category: 'Wafer-Scale AI Engine',
-                configured: !!localStorage.getItem('omni_key_CEREBRAS_API_KEY'),
-                has_key: !!localStorage.getItem('omni_key_CEREBRAS_API_KEY'),
+                configured: KeyPoolManager.getPool('CEREBRAS_API_KEY').length > 0,
+                has_key: KeyPoolManager.getPool('CEREBRAS_API_KEY').length > 0,
                 env_var: 'CEREBRAS_API_KEY',
                 free_key_url: 'https://cloud.cerebras.ai',
                 notes: 'World-record token generation speeds (>1,800 tokens/sec) on wafer-scale chips.',
@@ -1255,8 +1536,8 @@ async function loadProviders() {
                 id: 'together',
                 name: 'Together AI',
                 category: 'Distributed Inference',
-                configured: !!localStorage.getItem('omni_key_TOGETHER_API_KEY'),
-                has_key: !!localStorage.getItem('omni_key_TOGETHER_API_KEY'),
+                configured: KeyPoolManager.getPool('TOGETHER_API_KEY').length > 0,
+                has_key: KeyPoolManager.getPool('TOGETHER_API_KEY').length > 0,
                 env_var: 'TOGETHER_API_KEY',
                 free_key_url: 'https://api.together.ai',
                 notes: 'Free credits for new accounts covering research, coding & reasoning.',
@@ -1279,7 +1560,9 @@ async function loadProviders() {
     state.providers = provMap;
     container.innerHTML = '';
     Object.entries(state.providers).forEach(([pid, p]) => {
-        const isConfigured = p.configured ?? p.has_key ?? false;
+        const env = p.env_var || p.env_key;
+        const statusSummary = env ? KeyPoolManager.getStatusSummary(env) : null;
+        const isConfigured = (statusSummary && statusSummary.total > 0) || p.configured || p.has_key || pid === 'google' || pid === 'ollama';
         const card = document.createElement('div');
         card.className = 'provider-card glass-panel';
         card.innerHTML = `
@@ -1290,7 +1573,7 @@ async function loadProviders() {
                 </div>
                 <span class="provider-status-badge ${isConfigured ? 'status-active' : 'status-missing'}">
                     <i class="fa-solid ${isConfigured ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i>
-                    ${isConfigured ? 'Active' : 'Missing Key'}
+                    ${isConfigured ? (statusSummary && statusSummary.total > 1 ? `${statusSummary.active}/${statusSummary.total} Active` : 'Active') : 'Missing Key'}
                 </span>
             </div>
             <div class="provider-meta-notes">
@@ -1338,8 +1621,7 @@ window.pingProvider = async function(pid) {
     // Fallback: direct client test to provider API
     try {
         if (pid === 'google') {
-            const defaultKey = atob("QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=");
-            const key = localStorage.getItem('omni_key_GEMINI_API_KEY') || defaultKey;
+            const key = KeyPoolManager.getActiveKey('GEMINI_API_KEY');
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
             const lat = Math.round(performance.now() - start);
             if (res.ok) {
@@ -1367,28 +1649,41 @@ window.openKeyModal = function(pid, name, envKey, docsUrl) {
     const envLabel = document.getElementById('modal-env-label');
     const linkEl = document.getElementById('modal-key-link');
     const keyInput = document.getElementById('modal-key-input');
+    const poolBadge = document.getElementById('modal-pool-count');
 
     if (!modal) return;
     nameEl.innerText = `Configure ${name}`;
-    descEl.innerText = `Enter the API key for ${name}. Saved locally in .env and browser cache.`;
+    descEl.innerText = `Enter 1 or more API keys (one per line). The self-healing circuit breaker automatically handles 429 quota limits, rotations, and auto-recovery.`;
     envLabel.innerText = `Environment Variable: ${envKey}`;
     linkEl.href = docsUrl || '#';
-    keyInput.value = localStorage.getItem('omni_key_' + envKey) || '';
+    keyInput.value = KeyPoolManager.getPoolText(envKey);
+
+    const status = KeyPoolManager.getStatusSummary(envKey);
+    if (poolBadge) {
+        if (status.total > 0) {
+            poolBadge.innerText = `${status.active}/${status.total} Ready (Auto-Healing)`;
+            poolBadge.style.background = status.active > 0 ? 'var(--accent-emerald)' : '#ffaa00';
+            poolBadge.style.color = '#000';
+        } else {
+            poolBadge.innerText = 'No Keys';
+            poolBadge.style.background = 'rgba(255,255,255,0.2)';
+            poolBadge.style.color = '#fff';
+        }
+    }
 
     modal.classList.remove('hidden');
     sfx.playClick();
 
     document.getElementById('modal-save-btn').onclick = async () => {
         const val = keyInput.value.trim();
-        if (!val) return;
         try {
-            localStorage.setItem('omni_key_' + envKey, val);
+            const pool = KeyPoolManager.setKeysFromText(envKey, val);
             await fetch('/api/keys', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ env_var: envKey, value: val, env_key: envKey, api_key: val })
-            });
-            showToast(`${name} key successfully saved!`);
+            }).catch(() => {});
+            showToast(`${name} Key Pool updated (${pool.length} key(s) with auto-recovery)!`);
             modal.classList.add('hidden');
             loadProviders();
             sfx.playComplete();
