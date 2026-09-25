@@ -1,9 +1,18 @@
 {
   "version": 2,
+  "functions": {
+    "api/**/*.py": {
+      "includeFiles": "core/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/static/(.*)",
       "destination": "/public/$1"
+    },
+    {
+      "source": "/favicon.ico",
+      "destination": "/public/logo.png"
     },
     {
       "source": "/(style.css|app.js|logo.png|ai_bg.jpg|ai_wheel.png|genesis_logo.png|alfa_logo.png)",
