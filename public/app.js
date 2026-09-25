@@ -352,6 +352,7 @@ function renderChatMessages() {
                 </div>
             `;
             feed.appendChild(aiWrap);
+            enhanceCodeBlocks(aiWrap);
         }
     });
 
@@ -578,43 +579,85 @@ function initChatInput() {
 }
 
 // ==========================================
-// DIRECT CLIENT-SIDE FRONTIER AI ENGINE (Real Google Gemini 3.1 & 3.5 Flash)
+// DIRECT CLIENT-SIDE FRONTIER AI ENGINE (GENESIS AI 5.0 Universal Engine)
 // ==========================================
-async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallback) {
+async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallback, msgId) {
     const defaultKey = atob("QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=");
     const key = localStorage.getItem('omni_key_GEMINI_API_KEY') || defaultKey;
     
+    // Select model and hyperparams based on active profile
     let targetModel = 'gemini-3.1-flash-lite';
-    if (state.activeProfile === 'reasoning' || (state.activeModel && state.activeModel.includes('reasoning'))) {
+    let temp = 0.7;
+    let maxTokens = 2500;
+
+    if (state.activeProfile === 'reasoning' || state.reasonToggled) {
         targetModel = 'gemini-3.5-flash';
-    } else if (state.activeModel && state.activeModel.includes('3.5')) {
+        temp = 0.4;
+    } else if (state.activeProfile === 'coding') {
+        targetModel = 'gemini-3.5-flash';
+        temp = 0.2;
+    } else if (state.activeProfile === 'speed') {
+        targetModel = 'gemini-3.1-flash-lite';
+        temp = 0.2;
+    } else if (state.activeProfile === 'search' || state.searchToggled) {
         targetModel = 'gemini-3.5-flash-lite';
+        temp = 0.5;
+    }
+
+    // Build Genesis AI 5.0 Cognitive System Instructions
+    let sysText = "You are GENESIS AI 5.0, the Frontier Universal Cognitive Neural Interface and Master AI Gateway. " +
+        "You possess elite cross-domain intelligence, deep algorithmic reasoning, master-level software architecture, and real-time knowledge synthesis. " +
+        "Always respond with clarity, intellectual depth, and structural precision using GitHub-flavored Markdown. " +
+        "Format mathematical equations and formulas using LaTeX notation ($...$ or $$...$$). " +
+        "When coding, write production-grade, bug-free, complete implementations with comments explaining key logic. " +
+        "Embody the identity of GENESIS AI 5.0 proudly.";
+
+    if (state.activeProfile === 'reasoning' || state.reasonToggled) {
+        sysText += "\n\n[COGNITIVE REASONING ENGINE ACTIVE]: Break down the problem step-by-step. " +
+            "First, output your internal thought trace enclosed inside <thought> and </thought> tags. " +
+            "Analyze edge cases, evaluate constraints, verify mathematical or logical consistency. " +
+            "After closing </thought>, provide your final polished solution.";
+    } else if (state.activeProfile === 'coding') {
+        sysText += "\n\n[ELITE SOFTWARE ARCHITECT ACTIVE]: Focus on clean code architecture, optimal time/space complexity, modularity, and error handling. Always use explicit language tags on fenced codeblocks.";
+    } else if (state.activeProfile === 'search' || state.searchToggled) {
+        sysText += "\n\n[LIVE KNOWLEDGE SYNTHESIS ACTIVE]: Provide structured, fact-grounded knowledge with clear headers, key takeaways, and numbered citations [1], [2].";
+    } else if (state.activeProfile === 'speed') {
+        sysText += "\n\n[ULTRA-SPEED MODE]: Be extremely direct, concise, and immediate.";
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${key}`;
     
+    // Map conversation messages
     const contents = [];
     if (currentChat && currentChat.messages && currentChat.messages.length > 0) {
         currentChat.messages.forEach(m => {
-            contents.push({
-                role: m.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: m.content }]
-            });
+            const cleanContent = m.content.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim();
+            if (cleanContent) {
+                contents.push({
+                    role: m.role === 'assistant' ? 'model' : 'user',
+                    parts: [{ text: cleanContent }]
+                });
+            }
         });
     } else {
         contents.push({ role: 'user', parts: [{ text: prompt }] });
     }
 
+    const payload = {
+        systemInstruction: {
+            parts: [{ text: sysText }]
+        },
+        contents: contents,
+        generationConfig: {
+            temperature: temp,
+            maxOutputTokens: maxTokens
+        }
+    };
+
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: contents,
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 2048
-            }
-        })
+        body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
@@ -624,8 +667,12 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let fullText = '';
+    let fullRawText = '';
     const feed = document.getElementById('chat-messages') || document.getElementById('chat-feed');
+
+    const thoughtEl = msgId ? document.getElementById(`${msgId}-thought`) : null;
+    const thoughtBody = msgId ? document.getElementById(`${msgId}-thought-body`) : null;
+    const thoughtTitle = msgId ? document.querySelector(`#${msgId}-thought .thought-header span`) : null;
 
     while (true) {
         const { value, done } = await reader.read();
@@ -643,12 +690,35 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
                     const parsed = JSON.parse(dataStr);
                     const part = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     if (part) {
-                        fullText += part;
+                        fullRawText += part;
                         state.tokenCounter += part.split(/\s+/).length || 1;
-                        if (window.marked && bodyEl) {
-                            bodyEl.innerHTML = marked.parse(fullText);
-                        } else if (bodyEl) {
-                            bodyEl.innerText = fullText;
+
+                        // Check for <thought> tags
+                        if (fullRawText.includes('<thought>')) {
+                            if (thoughtEl) thoughtEl.classList.remove('hidden');
+
+                            if (fullRawText.includes('</thought>')) {
+                                const parts = fullRawText.split('</thought>');
+                                const thoughtText = parts[0].replace('<thought>', '').trim();
+                                const answerText = parts.slice(1).join('</thought>').trim();
+
+                                if (thoughtBody) thoughtBody.innerText = thoughtText;
+                                if (thoughtTitle) thoughtTitle.innerText = "Cognitive Reasoning (Completed)";
+                                if (bodyEl) {
+                                    bodyEl.innerHTML = window.marked ? marked.parse(answerText) : answerText;
+                                }
+                            } else {
+                                const thoughtText = fullRawText.replace('<thought>', '').trim();
+                                if (thoughtBody) thoughtBody.innerText = thoughtText;
+                                if (thoughtTitle) thoughtTitle.innerText = "Analyzing & Reasoning...";
+                                if (bodyEl) {
+                                    bodyEl.innerHTML = '<span class="typing-cursor">▌ Synthesizing solution...</span>';
+                                }
+                            }
+                        } else {
+                            if (bodyEl) {
+                                bodyEl.innerHTML = window.marked ? marked.parse(fullRawText) : fullRawText;
+                            }
                         }
 
                         if (updateSpeedCallback) updateSpeedCallback();
@@ -658,8 +728,52 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
         }
         if (feed) feed.scrollTop = feed.scrollHeight;
     }
-    return fullText;
+
+    let finalCleanText = fullRawText;
+    if (fullRawText.includes('</thought>')) {
+        finalCleanText = fullRawText.split('</thought>').slice(1).join('</thought>').trim();
+    }
+
+    return finalCleanText || fullRawText;
 }
+
+// Enhance code snippets with language badges and interactive Copy button
+function enhanceCodeBlocks(container) {
+    if (!container) return;
+    container.querySelectorAll('pre code').forEach((block) => {
+        if (window.hljs) hljs.highlightElement(block);
+        
+        const pre = block.parentElement;
+        if (pre && !pre.querySelector('.code-header-strip')) {
+            const langClass = Array.from(block.classList).find(c => c.startsWith('language-'));
+            const langName = langClass ? langClass.replace('language-', '').toUpperCase() : 'CODE';
+            
+            const header = document.createElement('div');
+            header.className = 'code-header-strip';
+            header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.5); padding:6px 12px; font-size:11px; font-family:monospace; color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.08); border-top-left-radius:8px; border-top-right-radius:8px;';
+            header.innerHTML = `
+                <span><i class="fa-solid fa-code" style="margin-right:6px;"></i>${langName}</span>
+                <button class="copy-code-btn" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:11px; display:flex; align-items:center; gap:4px;" onclick="copyCodeSnippet(this)">
+                    <i class="fa-regular fa-copy"></i> Copy
+                </button>
+            `;
+            pre.insertBefore(header, block);
+            pre.style.borderRadius = '8px';
+            pre.style.overflow = 'hidden';
+        }
+    });
+}
+
+window.copyCodeSnippet = function(btn) {
+    const pre = btn.closest('pre');
+    const code = pre.querySelector('code')?.innerText || '';
+    navigator.clipboard.writeText(code);
+    btn.innerHTML = '<i class="fa-solid fa-check" style="color:var(--accent-emerald)"></i> Copied!';
+    sfx.playClick();
+    setTimeout(() => {
+        btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+    }, 2000);
+};
 
 async function submitChatMessage() {
     const input = document.getElementById('chat-input');
@@ -773,7 +887,7 @@ async function submitChatMessage() {
                     const hudSpeed = document.getElementById('hud-tok-speed');
                     if (hudSpeed) hudSpeed.innerText = `${speed} tok/s`;
                 };
-                fullText = await streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeed);
+                fullText = await streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeed, msgId);
             }
         } else {
             const reader = res.body.getReader();
@@ -820,10 +934,8 @@ async function submitChatMessage() {
         currentChat.messages.push({ role: 'assistant', content: fullText });
         saveChatsToStorage();
 
-        // Highlight code
-        if (window.hljs) {
-            bodyEl.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
-        }
+        // Highlight code & add interactive copy buttons
+        enhanceCodeBlocks(document.getElementById(`${msgId}-content`));
 
         // Add action buttons
         const contentBox = document.getElementById(`${msgId}-content`);
