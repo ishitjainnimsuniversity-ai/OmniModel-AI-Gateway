@@ -18,6 +18,9 @@ const state = {
     providers: {},
     searchToggled: false,
     reasonToggled: false,
+    swarmToggled: false,
+    imageGenToggled: false,
+    attachments: [], // [ { name, type, data, isImage, text } ]
     startTime: 0,
     tokenCounter: 0,
 };
@@ -250,7 +253,44 @@ class SystemActionEngine {
             };
         }
 
-        // 2. Messaging / Notification Dispatch
+        // 2. 100% Free AI Image Generation (Flux.1 / SDXL)
+        if (state.imageGenToggled ||
+            /^(generate|draw|paint|create|render)\s+(an?\s+)?(image|picture|photo|illustration|art)\s+(of|showing)?/i.test(p) ||
+            /image\s+of/i.test(p)) {
+            return {
+                type: 'image_gen',
+                prompt: p
+            };
+        }
+
+        // 3. Live Atmospheric Weather HUD
+        const wMatch = p.match(/(what('s|\s+is)\s+the\s+)?weather\s+(in|for|at)\s+([A-Za-z\s]+)/i) ||
+                        p.match(/(forecast|temperature)\s+(in|for|at)\s+([A-Za-z\s]+)/i);
+        if (wMatch) {
+            const city = (wMatch[4] || wMatch[3] || 'London').trim().replace(/[?!.]+$/, '');
+            return {
+                type: 'weather',
+                city: city
+            };
+        }
+
+        // 4. Live Countdown Timer
+        const tMatch = p.match(/(set|start)?\s*(a\s*)?timer\s+(for\s+)?(\d+)\s*(s|sec|seconds?|m|min|minutes?|h|hours?)/i) ||
+                       p.match(/timer\s+(\d+)\s*(s|sec|seconds?|m|min|minutes?)/i);
+        if (tMatch) {
+            const num = parseInt(tMatch[4] || tMatch[1] || '60', 10);
+            const unit = (tMatch[5] || tMatch[2] || 'm').toLowerCase();
+            let totalSec = num;
+            if (unit.startsWith('m')) totalSec = num * 60;
+            if (unit.startsWith('h')) totalSec = num * 3600;
+            return {
+                type: 'timer',
+                seconds: totalSec,
+                label: `${num} ${unit}`
+            };
+        }
+
+        // 5. Messaging / Notification Dispatch
         const msgMatch = p.match(/(send|draft|dispatch|forward|write)\s+(a\s*)?(message|text|email|sms|dm|alert|notification)\s+to\s+([A-Za-z0-9_\s]+?)(:|\s+saying\s+|\s+that\s+|,|\.|$)([\s\S]*)/i) ||
                          p.match(/message\s+([A-Za-z0-9_\s]+?)(:|\s+saying\s+|\s+that\s+)([\s\S]+)/i);
 
@@ -264,10 +304,11 @@ class SystemActionEngine {
             };
         }
 
-        // 3. Creator & Architectural Origin
+        // 6. Creator & Architectural Origin
         if (/who\s+(created|made|built|developed|designed|coded)\s+(you|this\s+model|genesis)/i.test(p) ||
             /who\s+is\s+your\s+(creator|author|developer|engineer|builder)/i.test(p) ||
-            /who\s+had\s+(created|crrated|made)\s+this/i.test(p)) {
+            /who\s+had\s+(created|crrated|made)\s+this/i.test(p) ||
+            /crrated/i.test(p)) {
             return {
                 type: 'creator_info'
             };
@@ -303,6 +344,72 @@ class SystemActionEngine {
         <button class="action-mini-btn" style="background:rgba(255,170,0,0.2); border:1px solid #ffaa00; color:#ffaa00; padding:3px 8px; border-radius:6px; font-size:11px;" onclick="setLightColor('amber')">Warm Amber</button>
         <button class="action-mini-btn" style="background:rgba(180,0,255,0.2); border:1px solid #b400ff; color:#b400ff; padding:3px 8px; border-radius:6px; font-size:11px;" onclick="setLightColor('purple')">Quantum</button>
         <button class="action-mini-btn" style="background:rgba(255,42,109,0.2); border:1px solid #ff2a6d; color:#ff2a6d; padding:3px 8px; border-radius:6px; font-size:11px;" onclick="setLightColor('rose')">Neon Red</button>
+    </div>
+</div>`;
+        }
+
+        if (action.type === 'image_gen') {
+            try { sfx.playTransmit(); } catch(e) {}
+            let cleanPrompt = action.prompt.replace(/^(generate|draw|paint|create|render)\s+(an?\s+)?(image|picture|photo|illustration|art)?\s*(of|showing)?/i, '').trim();
+            if (!cleanPrompt) cleanPrompt = "Futuristic cybernetic quantum neural AI core, ultra-detailed 8k octane render";
+            const seed = Math.floor(Math.random() * 9999999);
+            const encoded = encodeURIComponent(cleanPrompt);
+            const imgUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${seed}`;
+            
+            return `
+<div class="system-action-widget ai-image-widget">
+    <div class="ai-image-header">
+        <span style="font-weight:700; color:var(--accent-cyan);"><i class="fa-solid fa-wand-magic-sparkles"></i> 100% Free AI Image Synthesis (Flux.1 / SDXL)</span>
+        <span class="badge-mini" style="background:var(--accent-emerald); color:#000; font-weight:700;">FLUX-HD</span>
+    </div>
+    <div class="ai-image-container">
+        <img src="${imgUrl}" alt="${escapeAttr(cleanPrompt)}" loading="lazy" onload="this.style.opacity=1" style="opacity:0; transition:opacity 0.6s ease;" />
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(0,0,0,0.5); flex-wrap:wrap; gap:8px;">
+        <span style="font-size:11px; color:var(--text-muted); font-style:italic;">"${escapeHtml(cleanPrompt)}"</span>
+        <div style="display:flex; gap:8px;">
+            <a href="${imgUrl}" target="_blank" download="genesis_ai_${Date.now()}.jpg" class="action-mini-btn" style="text-decoration:none; background:rgba(0,240,255,0.15); border:1px solid var(--accent-cyan); color:var(--accent-cyan); padding:5px 12px; border-radius:6px; font-size:11px; display:inline-flex; align-items:center; gap:4px;">
+                <i class="fa-solid fa-download"></i> Download HD
+            </a>
+            <button class="action-mini-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:5px 12px; border-radius:6px; font-size:11px;" onclick="window.open('${imgUrl}', '_blank')">
+                <i class="fa-solid fa-expand"></i> View Full
+            </button>
+        </div>
+    </div>
+</div>`;
+        }
+
+        if (action.type === 'weather') {
+            try { sfx.playClick(); } catch(e) {}
+            const hudId = 'weather-' + Date.now();
+            setTimeout(() => { if (window.fetchWeatherHUD) window.fetchWeatherHUD(hudId, action.city); }, 50);
+            return `
+<div class="system-action-widget weather-hud-widget" id="${hudId}">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:var(--accent-cyan); font-weight:700; font-size:13px;"><i class="fa-solid fa-cloud-sun"></i> Querying Atmospheric Satellites for ${escapeHtml(action.city)}...</span>
+        <span class="typing-cursor">▌</span>
+    </div>
+</div>`;
+        }
+
+        if (action.type === 'timer') {
+            try { sfx.playClick(); } catch(e) {}
+            const timerId = 'timer-' + Date.now();
+            const totalSec = action.seconds;
+            const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
+            const s = String(totalSec % 60).padStart(2, '0');
+            setTimeout(() => { if (window.startCountdownTimer) window.startCountdownTimer(timerId, totalSec); }, 100);
+
+            return `
+<div class="system-action-widget timer-widget" id="${timerId}">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-weight:700; color:#fbbf24; font-size:13px;"><i class="fa-solid fa-stopwatch"></i> Cybernetic Countdown Timer</span>
+        <span class="badge-mini" id="${timerId}-status" style="background:#fbbf24; color:#000; font-weight:700;">ACTIVE</span>
+    </div>
+    <div class="timer-display" id="${timerId}-disp">${m}:${s}</div>
+    <div class="timer-controls">
+        <button class="action-mini-btn" style="background:rgba(251,191,36,0.15); border:1px solid #fbbf24; color:#fbbf24; padding:5px 14px; border-radius:6px; font-size:11px;" onclick="window.startCountdownTimer('${timerId}', ${totalSec})"><i class="fa-solid fa-play"></i> Restart</button>
+        <button class="action-mini-btn" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:5px 14px; border-radius:6px; font-size:11px;" onclick="window.pauseCountdownTimer('${timerId}')"><i class="fa-solid fa-pause"></i> Pause</button>
     </div>
 </div>`;
         }
@@ -397,6 +504,100 @@ window.setLightColor = function(color) {
 function escapeAttr(str) {
     return String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+window.activeTimers = {};
+window.startCountdownTimer = function(id, totalSec) {
+    let remain = totalSec;
+    const disp = document.getElementById(`${id}-disp`);
+    const status = document.getElementById(`${id}-status`);
+    if (window.activeTimers[id]) clearInterval(window.activeTimers[id]);
+    if (status) {
+        status.innerText = "COUNTING DOWN";
+        status.style.background = "#fbbf24";
+        status.style.color = "#000";
+    }
+    window.activeTimers[id] = setInterval(() => {
+        remain--;
+        if (remain <= 0) {
+            clearInterval(window.activeTimers[id]);
+            if (disp) disp.innerText = "00:00 - TIME IS UP!";
+            if (status) {
+                status.innerText = "ALERT RINGING";
+                status.style.background = "var(--accent-rose)";
+                status.style.color = "#fff";
+            }
+            try { sfx.playComplete(); } catch(e) {}
+            showToast("Timer finished! Alarm ringing.");
+            return;
+        }
+        const m = String(Math.floor(remain / 60)).padStart(2, '0');
+        const s = String(remain % 60).padStart(2, '0');
+        if (disp) disp.innerText = `${m}:${s}`;
+    }, 1000);
+};
+
+window.pauseCountdownTimer = function(id) {
+    if (window.activeTimers[id]) {
+        clearInterval(window.activeTimers[id]);
+        const status = document.getElementById(`${id}-status`);
+        if (status) {
+            status.innerText = "PAUSED";
+            status.style.background = "rgba(255,255,255,0.2)";
+            status.style.color = "#fff";
+        }
+        showToast("Timer paused.");
+    }
+};
+
+window.fetchWeatherHUD = async function(id, city) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    try {
+        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`);
+        const geoData = await geoRes.json();
+        if (!geoData.results || geoData.results.length === 0) {
+            el.innerHTML = `<span style="color:var(--text-muted); font-size:12px;">Satellite scan could not pinpoint coordinates for "${escapeHtml(city)}".</span>`;
+            return;
+        }
+        const loc = geoData.results[0];
+        const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current_weather=true`);
+        const wData = await wRes.json();
+        const cur = wData.current_weather;
+        const temp = Math.round(cur.temperature);
+        const wind = cur.windspeed;
+        const code = cur.weathercode;
+        let cond = "Clear Skies";
+        let icon = "fa-solid fa-sun";
+        if (code >= 1 && code <= 3) { cond = "Partly Cloudy"; icon = "fa-solid fa-cloud-sun"; }
+        else if (code >= 45 && code <= 48) { cond = "Foggy / Mist"; icon = "fa-solid fa-smog"; }
+        else if (code >= 51 && code <= 67) { cond = "Rain Showers"; icon = "fa-solid fa-cloud-showers-heavy"; }
+        else if (code >= 71 && code <= 86) { cond = "Snowfall"; icon = "fa-regular fa-snowflake"; }
+        else if (code >= 95) { cond = "Thunderstorm Alert"; icon = "fa-solid fa-bolt"; }
+
+        el.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <span style="font-weight:700; color:var(--accent-cyan); font-size:13px;"><i class="fa-solid fa-cloud-sun"></i> Live Atmospheric Weather HUD</span>
+                <span class="badge-mini" style="background:var(--accent-cyan); color:#000; font-weight:700;">LIVE METEO</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:22px; font-weight:800; color:#fff;">${escapeHtml(loc.name)}, ${loc.country || ''}</div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">${cond} &bull; ${new Date().toLocaleTimeString()}</div>
+                </div>
+                <div class="weather-temp-badge">
+                    <i class="${icon}" style="color:var(--accent-cyan); font-size:26px;"></i> ${temp}°C
+                </div>
+            </div>
+            <div class="weather-details-grid">
+                <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:8px;">Wind: <strong>${wind} km/h</strong></div>
+                <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:8px;">Coords: <strong>${loc.latitude.toFixed(2)}°, ${loc.longitude.toFixed(2)}°</strong></div>
+                <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:8px;">Sensors: <strong style="color:var(--accent-emerald);">Online</strong></div>
+            </div>
+        `;
+    } catch(err) {
+        el.innerHTML = `<span style="color:var(--text-muted); font-size:12px;">Atmospheric satellite feed unavailable.</span>`;
+    }
+};
 
 
 // ==========================================
@@ -943,7 +1144,419 @@ function initChatInput() {
         });
     }
 
-    initVoiceInput();
+    // Swarm Consensus Toggle Button
+    const swarmBtn = document.getElementById('toggle-swarm-btn');
+    if (swarmBtn) {
+        swarmBtn.addEventListener('click', () => {
+            state.swarmToggled = !state.swarmToggled;
+            swarmBtn.classList.toggle('active', state.swarmToggled);
+            showToast(state.swarmToggled ? "Multi-Agent Swarm (Consensus) Active" : "Swarm Mode Disabled");
+            sfx.playClick();
+        });
+    }
+
+    // 100% Free AI Image Gen Toggle Button
+    const imgGenBtn = document.getElementById('toggle-image-gen-btn');
+    if (imgGenBtn) {
+        imgGenBtn.addEventListener('click', () => {
+            state.imageGenToggled = !state.imageGenToggled;
+            imgGenBtn.classList.toggle('active', state.imageGenToggled);
+            showToast(state.imageGenToggled ? "AI Image Generation Mode Active" : "Image Mode Disabled");
+            sfx.playClick();
+        });
+    }
+
+    initFileAttachments();
+    initJarvisVoice();
+}
+
+// ==========================================
+// 6.1 MULTIMODAL VISION & FILE ATTACHMENTS
+// ==========================================
+function initFileAttachments() {
+    const attachBtn = document.getElementById('attach-file-btn');
+    const fileInput = document.getElementById('file-attachment-input');
+    const previewBar = document.getElementById('attachment-preview-bar');
+
+    if (!attachBtn || !fileInput) return;
+
+    attachBtn.addEventListener('click', () => {
+        fileInput.click();
+        sfx.playClick();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files) handleFiles(e.target.files);
+        fileInput.value = '';
+    });
+
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput) {
+        chatInput.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            chatInput.style.borderColor = 'var(--accent-cyan)';
+        });
+        chatInput.addEventListener('dragleave', () => {
+            chatInput.style.borderColor = '';
+        });
+        chatInput.addEventListener('drop', (e) => {
+            e.preventDefault();
+            chatInput.style.borderColor = '';
+            if (e.dataTransfer && e.dataTransfer.files) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+    }
+
+    function handleFiles(files) {
+        Array.from(files).forEach(file => {
+            const isImg = file.type.startsWith('image/');
+            const reader = new FileReader();
+
+            if (isImg) {
+                reader.onload = (ev) => {
+                    state.attachments.push({
+                        name: file.name,
+                        type: file.type || 'image/png',
+                        isImage: true,
+                        data: ev.target.result
+                    });
+                    renderAttachmentPreviews();
+                };
+                reader.readAsDataURL(file);
+            } else {
+                reader.onload = (ev) => {
+                    state.attachments.push({
+                        name: file.name,
+                        type: file.type || 'text/plain',
+                        isImage: false,
+                        text: ev.target.result
+                    });
+                    renderAttachmentPreviews();
+                };
+                reader.readAsText(file);
+            }
+        });
+        try { sfx.playTransmit(); } catch(e) {}
+        showToast('File attached. Multimodal Vision active.');
+    }
+
+    window.renderAttachmentPreviews = function() {
+        if (!previewBar) return;
+        if (state.attachments.length === 0) {
+            previewBar.classList.add('hidden');
+            previewBar.innerHTML = '';
+            return;
+        }
+
+        previewBar.classList.remove('hidden');
+        previewBar.innerHTML = state.attachments.map((att, idx) => `
+            <div class="attachment-chip">
+                ${att.isImage ? `<img src="${att.data}" alt="${escapeAttr(att.name)}" />` : `<i class="fa-regular fa-file-code"></i>`}
+                <span class="chip-name">${escapeHtml(att.name)}</span>
+                <button class="chip-remove" onclick="removeAttachment(${idx})"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        `).join('');
+    };
+
+    window.removeAttachment = function(idx) {
+        state.attachments.splice(idx, 1);
+        renderAttachmentPreviews();
+        sfx.playClick();
+    };
+}
+
+// ==========================================
+// 6.2 JARVIS CONTINUOUS TWO-WAY VOICE ENGINE
+// ==========================================
+class JarvisVoiceEngine {
+    constructor() {
+        this.recognition = null;
+        this.isListening = false;
+        this.synth = window.speechSynthesis;
+        this.modal = null;
+        this.statusBadge = null;
+        this.transcriptBox = null;
+        this.orbGlow = null;
+        this.silenceTimer = null;
+        this.lastSpokenText = '';
+        this.setupRecognition();
+    }
+
+    setupRecognition() {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) {
+            console.warn("SpeechRecognition not supported in this browser.");
+            return;
+        }
+
+        this.recognition = new SpeechRec();
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.lang = 'en-US';
+
+        this.recognition.onstart = () => {
+            this.isListening = true;
+            this.updateStatus("Listening continuously...", "var(--accent-cyan)");
+        };
+
+        this.recognition.onresult = (event) => {
+            let interim = '';
+            let final = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    final += event.results[i][0].transcript;
+                } else {
+                    interim += event.results[i][0].transcript;
+                }
+            }
+
+            const current = (final || interim).trim();
+            if (current) {
+                this.lastSpokenText = current;
+                if (this.transcriptBox) {
+                    this.transcriptBox.innerText = `"${current}"`;
+                }
+
+                clearTimeout(this.silenceTimer);
+                this.silenceTimer = setTimeout(() => {
+                    if (this.lastSpokenText.trim().length > 2 && this.isListening) {
+                        this.processSpokenQuery(this.lastSpokenText.trim());
+                    }
+                }, 1400);
+            }
+        };
+
+        this.recognition.onerror = (e) => {
+            console.warn("Jarvis voice error:", e.error);
+        };
+
+        this.recognition.onend = () => {
+            if (this.isListening && !this.synth?.speaking) {
+                try { this.recognition.start(); } catch(e) {}
+            }
+        };
+    }
+
+    openModal() {
+        this.modal = document.getElementById('jarvis-voice-modal');
+        this.statusBadge = document.getElementById('jarvis-status-badge');
+        this.transcriptBox = document.getElementById('jarvis-transcript-box');
+        this.orbGlow = document.getElementById('jarvis-orb-glow');
+
+        if (this.modal) this.modal.classList.remove('hidden');
+        try { sfx.playTransmit(); } catch(e) {}
+        this.startListening();
+    }
+
+    closeModal() {
+        this.stopListening();
+        if (this.synth) this.synth.cancel();
+        if (this.modal) this.modal.classList.add('hidden');
+        try { sfx.playClick(); } catch(e) {}
+    }
+
+    startListening() {
+        if (!this.recognition) {
+            showToast("Speech recognition is not supported in this browser.");
+            return;
+        }
+        this.isListening = true;
+        try { this.recognition.start(); } catch(e) {}
+        this.updateStatus("Listening continuously...", "var(--accent-cyan)");
+    }
+
+    stopListening() {
+        this.isListening = false;
+        try { this.recognition.stop(); } catch(e) {}
+        this.updateStatus("Microphone paused", "var(--text-muted)");
+    }
+
+    updateStatus(text, color) {
+        if (this.statusBadge) {
+            this.statusBadge.innerHTML = `<i class="fa-solid fa-wave-square"></i> ${text}`;
+            this.statusBadge.style.color = color;
+        }
+        if (this.orbGlow) {
+            this.orbGlow.style.background = `radial-gradient(circle, ${color} 0%, rgba(180, 0, 255, 0.15) 60%, transparent 80%)`;
+        }
+    }
+
+    async processSpokenQuery(text) {
+        this.stopListening();
+        this.updateStatus("Synthesizing neural response...", "var(--accent-purple)");
+        showToast("Processing voice query...");
+
+        const input = document.getElementById('chat-input');
+        if (input) input.value = text;
+        await submitChatMessage();
+
+        const curChat = state.chats[state.currentChatId];
+        const lastMsg = curChat?.messages?.[curChat.messages.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant') {
+            const cleanText = lastMsg.content
+                .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+                .replace(/```[\s\S]*?```/gi, 'Code snippet generated.')
+                .replace(/[#*`_\[\]()]/g, '')
+                .trim();
+            this.speak(cleanText);
+        } else {
+            this.startListening();
+        }
+    }
+
+    speak(text) {
+        if (!this.synth) {
+            this.startListening();
+            return;
+        }
+        this.synth.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text.slice(0, 320));
+        utterance.rate = 1.05;
+        utterance.pitch = 0.95;
+
+        const voices = this.synth.getVoices();
+        const preferred = voices.find(v => v.lang && v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
+        if (preferred) utterance.voice = preferred;
+
+        this.updateStatus("Speaking response aloud...", "var(--accent-emerald)");
+        if (this.transcriptBox) this.transcriptBox.innerText = `"${text.slice(0, 160)}..."`;
+
+        utterance.onend = () => {
+            this.startListening();
+        };
+        utterance.onerror = () => {
+            this.startListening();
+        };
+
+        this.synth.speak(utterance);
+    }
+}
+window.JarvisVoiceEngine = JarvisVoiceEngine;
+
+function initJarvisVoice() {
+    window.jarvisVoice = new JarvisVoiceEngine();
+
+    const jarvisBtn = document.getElementById('jarvis-voice-btn');
+    if (jarvisBtn) {
+        jarvisBtn.addEventListener('click', () => {
+            window.jarvisVoice.openModal();
+        });
+    }
+
+    const voiceInputBtn = document.getElementById('voice-input-btn');
+    if (voiceInputBtn) {
+        voiceInputBtn.addEventListener('click', () => {
+            window.jarvisVoice.openModal();
+        });
+    }
+
+    document.getElementById('jarvis-close-btn')?.addEventListener('click', () => {
+        window.jarvisVoice.closeModal();
+    });
+
+    document.getElementById('jarvis-end-btn')?.addEventListener('click', () => {
+        window.jarvisVoice.closeModal();
+    });
+
+    const muteBtn = document.getElementById('jarvis-mute-btn');
+    if (muteBtn) {
+        muteBtn.addEventListener('click', () => {
+            if (window.jarvisVoice.isListening) {
+                window.jarvisVoice.stopListening();
+                muteBtn.innerHTML = '<i class="fa-solid fa-microphone-slash" style="color:var(--accent-rose)"></i>';
+            } else {
+                window.jarvisVoice.startListening();
+                muteBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+            }
+            sfx.playClick();
+        });
+    }
+}
+
+// ==========================================
+// 6.3 LIVE INTERNET WEB SEARCH GROUNDING
+// ==========================================
+async function performLiveWebSearch(query) {
+    try {
+        const cleanQuery = query.replace(/(search|google|web|look up|find|news|current|latest)/gi, '').trim() || query;
+        const res = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQuery)}&utf8=&format=json&origin=*`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const results = data.query?.search?.slice(0, 3) || [];
+        if (results.length === 0) return null;
+
+        let context = "\n\n[LIVE INTERNET WEB SEARCH GROUNDING]:\n";
+        const citations = [];
+        results.forEach((item, idx) => {
+            const cleanSnippet = item.snippet.replace(/<[^>]+>/g, '');
+            const url = `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`;
+            context += `[${idx + 1}] "${item.title}": ${cleanSnippet} (Source: ${url})\n`;
+            citations.push({ index: idx + 1, title: item.title, url });
+        });
+        context += "Ground your response on these live real-time search findings, incorporating citations [1], [2].\n";
+        return { context, citations };
+    } catch(err) {
+        return null;
+    }
+}
+
+// ==========================================
+// 6.4 MULTI-AGENT SWARM CONSENSUS DEBATE
+// ==========================================
+async function executeSwarmConsensus(prompt, currentChat, bodyEl, updateSpeedCallback, msgId) {
+    bodyEl.innerHTML = `
+<div class="swarm-container">
+    <div class="swarm-consensus-banner">
+        <i class="fa-solid fa-users-viewfinder" style="font-size:16px; color:var(--accent-cyan);"></i>
+        <span>Multi-Agent Swarm Active: Concurrently Invoking Architect, Critic & Synthesizer...</span>
+    </div>
+    <div class="swarm-cols-grid">
+        <div class="swarm-agent-card architect">
+            <div class="swarm-agent-header arch"><i class="fa-solid fa-sitemap"></i> Architect Agent</div>
+            <div class="swarm-agent-body" id="${msgId}-arch-body"><span class="typing-cursor">▌ Generating system architecture...</span></div>
+        </div>
+        <div class="swarm-agent-card critic">
+            <div class="swarm-agent-header crit"><i class="fa-solid fa-shield-halved"></i> Critic Agent</div>
+            <div class="swarm-agent-body" id="${msgId}-crit-body"><span class="typing-cursor">▌ Evaluating constraints & risks...</span></div>
+        </div>
+        <div class="swarm-agent-card synthesizer">
+            <div class="swarm-agent-header synth"><i class="fa-solid fa-bolt"></i> Synthesizer Agent</div>
+            <div class="swarm-agent-body" id="${msgId}-synth-body"><span class="typing-cursor">▌ Waiting for debate reconciliation...</span></div>
+        </div>
+    </div>
+    <div id="${msgId}-final-consensus" style="margin-top:14px; border-top:1px solid rgba(255,255,255,0.08); padding-top:12px;"></div>
+</div>`;
+
+    const archEl = document.getElementById(`${msgId}-arch-body`);
+    const critEl = document.getElementById(`${msgId}-crit-body`);
+    const synthEl = document.getElementById(`${msgId}-synth-body`);
+    const finalEl = document.getElementById(`${msgId}-final-consensus`);
+
+    try {
+        const archPromise = streamGeminiDirect(`[ARCHITECT AGENT]: Provide the core structural foundation, algorithmic design, and architecture for: ${prompt}`, null, archEl, updateSpeedCallback);
+        const critPromise = streamGeminiDirect(`[CRITIC AGENT]: Identify vulnerabilities, edge cases, scalability bottlenecks, and trade-offs for: ${prompt}`, null, critEl, updateSpeedCallback);
+
+        const [archText, critText] = await Promise.all([archPromise, critPromise]);
+
+        if (synthEl) synthEl.innerHTML = '<span class="typing-cursor">▌ Synthesizing master consensus...</span>';
+        const synthPrompt = `[CHIEF SYNTHESIZER AGENT]: Reconcile the following Architect framework and Critic challenges into an authoritative, optimal master solution:\n\n[ARCHITECT]:\n${(archText||'').slice(0, 800)}\n\n[CRITIC]:\n${(critText||'').slice(0, 800)}\n\nOriginal Question: ${prompt}`;
+        const synthText = await streamGeminiDirect(synthPrompt, null, synthEl, updateSpeedCallback);
+
+        if (finalEl) {
+            finalEl.innerHTML = `
+<div style="background:rgba(0,255,180,0.06); border:1px solid rgba(0,255,180,0.25); border-radius:10px; padding:14px;">
+    <div style="font-weight:700; color:var(--accent-emerald); font-size:13px; margin-bottom:8px;"><i class="fa-solid fa-circle-check"></i> Unified Swarm Consensus Decision</div>
+    <div style="font-size:13px; color:#e2e8f0; line-height:1.6;">${window.marked ? marked.parse(synthText) : synthText}</div>
+</div>`;
+        }
+
+        return `### Unified Swarm Consensus\n\n${synthText}`;
+    } catch(err) {
+        console.warn("Swarm error:", err);
+        return await streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallback, msgId);
+    }
 }
 
 // ==========================================
@@ -964,7 +1577,7 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
     } else if (state.activeProfile === 'speed') {
         targetModel = 'gemini-3.1-flash-lite';
         temp = 0.2;
-    } else if (state.activeProfile === 'search' || state.searchToggled) {
+    } else if (state.activeProfile === 'search' || state.searchToggled || /search\s+the\s+web/i.test(prompt)) {
         targetModel = 'gemini-3.5-flash-lite';
         temp = 0.5;
     }
@@ -977,6 +1590,17 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
         "Format mathematical equations and formulas using LaTeX notation ($...$ or $$...$$). " +
         "When coding, write production-grade, bug-free, complete implementations with comments explaining key logic. " +
         "Embody the identity of GENESIS AI 5.0 proudly.";
+
+    // Live Web Search Grounding
+    if (state.activeProfile === 'search' || state.searchToggled || /search\s+(the\s+)?(web|internet|google|online)/i.test(prompt)) {
+        const liveSearch = await performLiveWebSearch(prompt);
+        if (liveSearch) {
+            sysText += liveSearch.context;
+            if (bodyEl && !bodyEl.dataset.widget) {
+                bodyEl.dataset.widget = `<div style="margin-bottom:12px; padding:10px 14px; background:rgba(0,240,255,0.06); border:1px solid rgba(0,240,255,0.25); border-radius:10px; font-size:11px; color:#cbd5e1;"><i class="fa-solid fa-globe" style="color:var(--accent-cyan); margin-right:6px;"></i> <strong>Live Web Grounding Active:</strong> Retrieved verified sources for query.</div>`;
+            }
+        }
+    }
 
     if (state.activeProfile === 'reasoning' || state.reasonToggled) {
         sysText += "\n\n[COGNITIVE REASONING ENGINE ACTIVE]: Break down the problem step-by-step. " +
@@ -991,7 +1615,7 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
         sysText += "\n\n[ULTRA-SPEED MODE]: Be extremely direct, concise, and immediate.";
     }
 
-    // Map conversation messages
+    // Map conversation messages & Attachments (Multimodal Vision)
     const contents = [];
     if (currentChat && currentChat.messages && currentChat.messages.length > 0) {
         currentChat.messages.forEach(m => {
@@ -1003,8 +1627,35 @@ async function streamGeminiDirect(prompt, currentChat, bodyEl, updateSpeedCallba
                 });
             }
         });
+    }
+
+    // Prepare current prompt parts (including vision & file attachments)
+    const currentParts = [{ text: prompt }];
+    if (state.attachments && state.attachments.length > 0) {
+        state.attachments.forEach(att => {
+            if (att.isImage && att.data) {
+                const rawBase64 = att.data.includes(',') ? att.data.split(',')[1] : att.data;
+                currentParts.push({
+                    inlineData: {
+                        mimeType: att.type || 'image/png',
+                        data: rawBase64
+                    }
+                });
+            } else if (att.text) {
+                currentParts.push({ text: `\n\n[ATTACHED FILE: ${att.name}]:\n${att.text}` });
+            }
+        });
+    }
+
+    if (contents.length === 0) {
+        contents.push({ role: 'user', parts: currentParts });
     } else {
-        contents.push({ role: 'user', parts: [{ text: prompt }] });
+        const lastMsg = contents[contents.length - 1];
+        if (lastMsg.role === 'user') {
+            lastMsg.parts = currentParts;
+        } else {
+            contents.push({ role: 'user', parts: currentParts });
+        }
     }
 
     const payload = {
@@ -1403,15 +2054,22 @@ function enhanceCodeBlocks(container) {
         if (pre && !pre.querySelector('.code-header-strip')) {
             const langClass = Array.from(block.classList).find(c => c.startsWith('language-'));
             const langName = langClass ? langClass.replace('language-', '').toUpperCase() : 'CODE';
+            const isRunnable = ['JAVASCRIPT', 'JS', 'NODE'].includes(langName);
             
             const header = document.createElement('div');
             header.className = 'code-header-strip';
             header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.5); padding:6px 12px; font-size:11px; font-family:monospace; color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.08); border-top-left-radius:8px; border-top-right-radius:8px;';
             header.innerHTML = `
                 <span><i class="fa-solid fa-code" style="margin-right:6px;"></i>${langName}</span>
-                <button class="copy-code-btn" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:11px; display:flex; align-items:center; gap:4px;" onclick="copyCodeSnippet(this)">
-                    <i class="fa-regular fa-copy"></i> Copy
-                </button>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    ${isRunnable ? `
+                    <button class="run-code-btn" style="background:rgba(0,255,180,0.15); border:1px solid var(--accent-emerald); color:var(--accent-emerald); cursor:pointer; font-size:11px; padding:2px 8px; border-radius:4px; display:flex; align-items:center; gap:4px;" onclick="runInlineCode(this)">
+                        <i class="fa-solid fa-play"></i> Run
+                    </button>` : ''}
+                    <button class="copy-code-btn" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:11px; display:flex; align-items:center; gap:4px;" onclick="copyCodeSnippet(this)">
+                        <i class="fa-regular fa-copy"></i> Copy
+                    </button>
+                </div>
             `;
             pre.insertBefore(header, block);
             pre.style.borderRadius = '8px';
@@ -1419,6 +2077,43 @@ function enhanceCodeBlocks(container) {
         }
     });
 }
+
+window.runInlineCode = function(btn) {
+    const pre = btn.closest('pre');
+    const code = pre.querySelector('code')?.innerText || '';
+    try { sfx.playClick(); } catch(e) {}
+    
+    let consoleEl = pre.parentElement.querySelector('.code-console-output');
+    if (!consoleEl) {
+        consoleEl = document.createElement('div');
+        consoleEl.className = 'code-console-output';
+        pre.parentElement.appendChild(consoleEl);
+    }
+    
+    consoleEl.innerHTML = '<span style="color:var(--accent-cyan); font-weight:700;"><i class="fa-solid fa-terminal"></i> In-Browser Sandbox Execution:</span>\n';
+    const logs = [];
+    const customConsole = {
+        log: (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+        error: (...args) => logs.push('[ERROR] ' + args.join(' ')),
+        warn: (...args) => logs.push('[WARN] ' + args.join(' '))
+    };
+    
+    try {
+        const fn = new Function('console', code);
+        const result = fn(customConsole);
+        if (logs.length > 0) {
+            consoleEl.innerHTML += logs.map(l => escapeHtml(l)).join('\n');
+        }
+        if (result !== undefined) {
+            consoleEl.innerHTML += `\n<span style="color:var(--accent-emerald);">-> Return: ${escapeHtml(typeof result === 'object' ? JSON.stringify(result) : String(result))}</span>`;
+        }
+        if (logs.length === 0 && result === undefined) {
+            consoleEl.innerHTML += `<span style="color:var(--accent-emerald);">✓ Executed cleanly with 0 errors.</span>`;
+        }
+    } catch(err) {
+        consoleEl.innerHTML += `<span style="color:var(--accent-rose);">Runtime Error: ${escapeHtml(err.message)}</span>`;
+    }
+};
 
 window.copyCodeSnippet = function(btn) {
     const pre = btn.closest('pre');
@@ -1521,11 +2216,22 @@ async function submitChatMessage() {
             }
         }
 
-        const res = await fetch('/api/chat/stream', {
-            method: 'POST',
-            headers: reqHeaders,
-            body: JSON.stringify(payload)
-        });
+        const updateSpeed = () => {
+            const elapsedSec = (performance.now() - state.startTime) / 1000;
+            const speed = Math.round(state.tokenCounter / (elapsedSec || 1));
+            const hudSpeed = document.getElementById('hud-tok-speed');
+            if (hudSpeed) hudSpeed.innerText = `${speed} tok/s`;
+        };
+
+        // If Swarm Mode is active, execute Multi-Agent Consensus Debate
+        if (state.swarmToggled || prompt.startsWith('@swarm') || /agent\s+swarm/i.test(prompt)) {
+            fullText = await executeSwarmConsensus(prompt, currentChat, bodyEl, updateSpeed, msgId);
+        } else {
+            const res = await fetch('/api/chat/stream', {
+                method: 'POST',
+                headers: reqHeaders,
+                body: JSON.stringify(payload)
+            });
 
         if (!res.ok) {
             // Fallback to standard OpenAI completions endpoint
@@ -1608,6 +2314,7 @@ async function submitChatMessage() {
                 feed.scrollTop = feed.scrollHeight;
             }
         }
+    }
 
         // Ensure widget is preserved in final display
         if (bodyEl && bodyEl.dataset.widget) {
@@ -1663,6 +2370,10 @@ async function submitChatMessage() {
         }
     } finally {
         state.isStreaming = false;
+        if (state.attachments && state.attachments.length > 0) {
+            state.attachments = [];
+            if (window.renderAttachmentPreviews) window.renderAttachmentPreviews();
+        }
     }
 }
 

@@ -295,9 +295,12 @@
 
                     <!-- Iconic ChatGPT Floating Input Console -->
                     <div class="chatgpt-input-wrapper">
+                        <!-- Attachment Preview Bar -->
+                        <div id="attachment-preview-bar" class="attachment-preview-bar hidden"></div>
+
                         <div class="chatgpt-input-box glass-panel">
                             
-                            <!-- Search & Reasoning Quick Toggles inside pill -->
+                            <!-- Search, Reasoning, Swarm & Image Toggles inside pill -->
                             <div class="input-toggles">
                                 <button class="input-pill-btn" id="toggle-search-btn" title="Toggle Live Web Search">
                                     <i class="fa-solid fa-globe"></i>
@@ -307,15 +310,34 @@
                                     <i class="fa-solid fa-brain"></i>
                                     <span>Reason</span>
                                 </button>
+                                <button class="input-pill-btn" id="toggle-swarm-btn" title="Toggle Multi-Agent Swarm (Consensus Debate)">
+                                    <i class="fa-solid fa-users-viewfinder"></i>
+                                    <span>Swarm</span>
+                                </button>
+                                <button class="input-pill-btn" id="toggle-image-gen-btn" title="100% Free AI Image Generation (Flux)">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    <span>Image</span>
+                                </button>
                             </div>
 
                             <!-- Textarea Input -->
-                            <textarea id="chat-input" placeholder="Message GENESIS AI 5.0..." rows="1"></textarea>
+                            <textarea id="chat-input" placeholder="Message GENESIS AI 5.0, or ask to generate an image, check weather, run code..." rows="1"></textarea>
 
                             <div class="input-actions-right">
+                                <!-- File & Vision Attachment Button -->
+                                <button class="action-round-btn" id="attach-file-btn" title="Attach Image or Document (Vision & OCR)">
+                                    <i class="fa-solid fa-paperclip"></i>
+                                </button>
+                                <input type="file" id="file-attachment-input" accept="image/*,.pdf,.txt,.py,.js,.json,.csv" style="display:none;" />
+
                                 <!-- Voice Dictation (Mic) -->
                                 <button class="action-round-btn" id="voice-input-btn" title="Voice Dictation">
                                     <i class="fa-solid fa-microphone"></i>
+                                </button>
+
+                                <!-- Jarvis Full Two-Way Voice Mode -->
+                                <button class="action-round-btn" id="jarvis-voice-btn" title="Launch Jarvis Two-Way Voice Assistant">
+                                    <i class="fa-solid fa-headset"></i>
                                 </button>
 
                                 <!-- Circular Send Button -->
@@ -326,7 +348,7 @@
                         </div>
 
                         <div class="input-footer-note">
-                            <span>GENESIS AI 5.0 can make mistakes. Consider checking important information.</span>
+                            <span>GENESIS AI 5.0 Universal Interface &bull; 100% Free Sovereign AI &bull; Created by Ishit Jain</span>
                         </div>
                     </div>
 
@@ -894,6 +916,48 @@ main();</code></pre>
             <div class="modal-footer">
                 <button id="modal-cancel-btn" class="secondary-btn">Cancel</button>
                 <button id="modal-save-btn" class="primary-btn"><i class="fa-solid fa-save"></i> Save Key</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jarvis Two-Way Voice Assistant Modal -->
+    <div id="jarvis-voice-modal" class="modal-overlay hidden" style="backdrop-filter:blur(16px); background:rgba(2, 6, 18, 0.88);">
+        <div class="jarvis-voice-card glass-panel" style="max-width:540px; width:92%; text-align:center; padding:32px 24px; position:relative; border:1px solid rgba(0,240,255,0.3); border-radius:24px; box-shadow:0 0 50px rgba(0,240,255,0.15);">
+            <button id="jarvis-close-btn" class="close-btn" style="position:absolute; top:18px; right:18px; font-size:16px;"><i class="fa-solid fa-xmark"></i></button>
+            
+            <div style="display:inline-flex; align-items:center; gap:8px; padding:6px 14px; background:rgba(0,240,255,0.1); border:1px solid rgba(0,240,255,0.25); border-radius:20px; font-size:12px; color:var(--accent-cyan); font-weight:700; margin-bottom:20px;">
+                <i class="fa-solid fa-satellite-dish"></i> JARVIS PROTOCOL ACTIVE
+            </div>
+
+            <h2 style="font-size:22px; font-weight:800; margin-bottom:6px; color:#fff;">Continuous Voice Assistant</h2>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:24px;">Hands-free, real-time conversational intelligence with zero-lag neural speech.</p>
+
+            <!-- Holographic Pulsing Orb / Waveform Visualizer -->
+            <div class="jarvis-orb-container" style="position:relative; width:160px; height:160px; margin:0 auto 24px; display:flex; align-items:center; justify-content:center;">
+                <div class="jarvis-orb-glow" id="jarvis-orb-glow"></div>
+                <div class="jarvis-orb-core" id="jarvis-orb-core">
+                    <i class="fa-solid fa-brain" style="font-size:36px; color:var(--accent-cyan);"></i>
+                </div>
+            </div>
+
+            <!-- Status Indicator -->
+            <div id="jarvis-status-badge" style="font-size:14px; font-weight:700; color:var(--accent-cyan); margin-bottom:12px;">
+                <i class="fa-solid fa-wave-square"></i> Initializing Neural Audio...
+            </div>
+
+            <!-- Live Spoken Transcript -->
+            <div id="jarvis-transcript-box" style="min-height:70px; max-height:120px; overflow-y:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 14px; font-size:13px; color:#e2e8f0; line-height:1.5; margin-bottom:24px; font-style:italic;">
+                "Speak now, I'm listening continuously..."
+            </div>
+
+            <!-- Voice Controls & Actions -->
+            <div style="display:flex; justify-content:center; align-items:center; gap:16px;">
+                <button id="jarvis-mute-btn" class="action-round-btn" style="width:48px; height:48px; font-size:16px; background:rgba(255,255,255,0.08);" title="Mute Microphone">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                <button id="jarvis-end-btn" class="primary-btn" style="background:#ff2a6d; border:none; padding:12px 28px; border-radius:28px; font-weight:700; font-size:14px; box-shadow:0 0 20px rgba(255,42,109,0.4);">
+                    <i class="fa-solid fa-phone-slash" style="margin-right:8px;"></i> End Voice Session
+                </button>
             </div>
         </div>
     </div>

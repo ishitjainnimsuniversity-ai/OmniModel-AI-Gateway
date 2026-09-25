@@ -1306,3 +1306,66 @@ body {
     .chatgpt-prompt-cards { grid-template-columns: 1fr; }
     .code-snippets-grid, .analytics-kpi-grid, .arena-selectors-grid, .arena-grid { grid-template-columns: 1fr; }
 }
+
+/* ====================================================
+   FLAGSHIP FEATURES 1-5 CSS STYLING
+   ==================================================== */
+
+/* Feature 1: Attachment Preview Bar & Chips */
+.attachment-preview-bar { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; background: rgba(0, 0, 0, 0.4); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.attachment-chip { display: inline-flex; align-items: center; gap: 8px; background: rgba(0, 240, 255, 0.12); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 20px; padding: 4px 10px; font-size: 11px; color: #fff; max-width: 240px; }
+.attachment-chip img { width: 20px; height: 20px; object-fit: cover; border-radius: 4px; }
+.attachment-chip .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-chip .chip-remove { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; display: flex; align-items: center; }
+.attachment-chip .chip-remove:hover { color: var(--accent-rose); }
+
+/* Feature 1: AI Generated Image Widget */
+.ai-image-widget { margin: 14px 0; border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 14px; overflow: hidden; background: rgba(0, 0, 0, 0.6); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+.ai-image-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255, 255, 255, 0.04); border-bottom: 1px solid rgba(255, 255, 255, 0.08); font-size: 12px; }
+.ai-image-container { position: relative; width: 100%; min-height: 280px; max-height: 480px; display: flex; align-items: center; justify-content: center; background: #040711; overflow: hidden; }
+.ai-image-container img { width: 100%; height: auto; max-height: 480px; object-fit: contain; display: block; border-radius: 4px; transition: transform 0.3s ease; }
+.ai-image-container img:hover { transform: scale(1.01); }
+.ai-image-prompt-tag { padding: 8px 14px; font-size: 11px; color: var(--text-muted); font-style: italic; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+
+/* Feature 3: Jarvis Voice Holographic Orb */
+.jarvis-orb-glow { position: absolute; width: 140px; height: 140px; border-radius: 50%; background: radial-gradient(circle, rgba(0, 240, 255, 0.4) 0%, rgba(180, 0, 255, 0.15) 60%, transparent 80%); animation: jarvisPulse 2s infinite ease-in-out; }
+.jarvis-orb-core { position: relative; width: 84px; height: 84px; border-radius: 50%; background: rgba(10, 18, 36, 0.9); border: 2px solid var(--accent-cyan); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 25px rgba(0, 240, 255, 0.6), inset 0 0 15px rgba(0, 240, 255, 0.3); animation: jarvisSpin 8s infinite linear; }
+@keyframes jarvisPulse {
+    0%, 100% { transform: scale(0.92); opacity: 0.7; }
+    50% { transform: scale(1.18); opacity: 1; filter: drop-shadow(0 0 30px rgba(0, 240, 255, 0.8)); }
+}
+@keyframes jarvisSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Feature 4: Live Weather HUD */
+.weather-hud-widget { margin: 14px 0; padding: 18px; background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(0, 240, 255, 0.05)); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 16px; }
+.weather-temp-badge { font-size: 32px; font-weight: 800; font-family: var(--font-heading); color: #fff; display: flex; align-items: center; gap: 8px; }
+.weather-details-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; font-size: 11px; }
+
+/* Feature 4: Live Countdown Timer */
+.timer-widget { margin: 14px 0; padding: 18px; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 14px; text-align: center; }
+.timer-display { font-size: 38px; font-family: var(--font-mono); font-weight: 800; color: #fbbf24; letter-spacing: 2px; text-shadow: 0 0 20px rgba(245, 158, 11, 0.5); margin: 8px 0; }
+.timer-controls { display: flex; justify-content: center; gap: 10px; margin-top: 10px; }
+
+/* Feature 4: In-Browser Code Sandbox */
+.code-sandbox-widget { margin: 12px 0; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; overflow: hidden; background: #050811; }
+.code-sandbox-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(16, 185, 129, 0.1); border-bottom: 1px solid rgba(16, 185, 129, 0.2); font-size: 11px; font-weight: 700; color: var(--accent-emerald); }
+.code-console-output { padding: 10px 14px; font-family: var(--font-mono); font-size: 11px; color: #a7f3d0; background: rgba(0, 0, 0, 0.6); max-height: 180px; overflow-y: auto; white-space: pre-wrap; }
+
+/* Feature 5: Multi-Agent Swarm Consensus Arena */
+.swarm-container { margin: 16px 0; display: flex; flex-direction: column; gap: 12px; }
+.swarm-cols-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 800px) { .swarm-cols-grid { grid-template-columns: 1fr; } }
+.swarm-agent-card { border-radius: 12px; padding: 14px; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); font-size: 12px; }
+.swarm-agent-card.architect { border-color: rgba(0, 240, 255, 0.35); }
+.swarm-agent-card.critic { border-color: rgba(255, 42, 109, 0.35); }
+.swarm-agent-card.synthesizer { border-color: rgba(0, 255, 180, 0.35); }
+.swarm-agent-header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12px; margin-bottom: 8px; }
+.swarm-agent-header.arch { color: var(--accent-cyan); }
+.swarm-agent-header.crit { color: var(--accent-rose); }
+.swarm-agent-header.synth { color: var(--accent-emerald); }
+.swarm-agent-body { max-height: 220px; overflow-y: auto; color: #cbd5e1; line-height: 1.5; font-size: 11px; }
+.swarm-consensus-banner { padding: 12px 16px; background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(0, 255, 180, 0.15)); border: 1px solid var(--accent-cyan); border-radius: 12px; font-weight: 700; font-size: 13px; color: #fff; display: flex; align-items: center; gap: 10px; }
+
