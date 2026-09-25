@@ -15,7 +15,8 @@ class SmartRouter:
             "name": "⚡ Ultra-Fast Speed (<150ms)",
             "description": "Blazing fast inference via custom LPU/wafer hardware",
             "chain": [
-                ("gemini", "gemini-flash-latest"),
+                ("gemini", "gemini-3.1-flash-lite"),
+                ("gemini", "gemini-3.5-flash-lite"),
                 ("groq", "llama-3.3-70b-versatile"),
                 ("cerebras", "llama3.1-70b"),
                 ("sambanova", "Meta-Llama-3.3-70B-Instruct"),
@@ -26,8 +27,8 @@ class SmartRouter:
             "name": "🧠 Deep Reasoning & Math",
             "description": "Complex chain-of-thought, mathematical proof, logic and deep planning",
             "chain": [
-                ("gemini", "gemini-flash-latest"),
-                ("gemini", "gemma-4-31b-it"),
+                ("gemini", "gemini-3.1-flash-lite"),
+                ("gemini", "gemini-3.8-flash"),
                 ("deepseek", "deepseek-reasoner"),
                 ("groq", "deepseek-r1-distill-llama-70b"),
                 ("openrouter", "deepseek/deepseek-r1:free"),
@@ -39,7 +40,8 @@ class SmartRouter:
             "name": "💻 Elite Software Architecture & Code",
             "description": "Complex full-stack coding, refactoring, debugging and algorithmic synthesis",
             "chain": [
-                ("gemini", "gemini-flash-latest"),
+                ("gemini", "gemini-3.1-flash-lite"),
+                ("gemini", "gemini-3.5-flash"),
                 ("anthropic", "claude-3-7-sonnet-20250219"),
                 ("mistral", "codestral-latest"),
                 ("openrouter", "qwen/qwen-2.5-coder-32b-instruct:free"),
@@ -51,7 +53,8 @@ class SmartRouter:
             "name": "🌐 Live Web Search & Grounding",
             "description": "Real-time web retrieval, current news, fact checking and source citations",
             "chain": [
-                ("gemini", "gemini-flash-latest"),
+                ("gemini", "gemini-3.1-flash-lite"),
+                ("gemini", "gemini-3.5-flash"),
                 ("perplexity", "sonar"),
                 ("openrouter", "google/gemini-2.0-flash-exp:free")
             ]
@@ -60,10 +63,11 @@ class SmartRouter:
             "name": "🆓 100% Zero-Cost / Free Tier",
             "description": "Auto-routes to verified 100% free models without credit card requirements",
             "chain": [
-                ("gemini", "gemini-flash-latest"),
+                ("gemini", "gemini-3.1-flash-lite"),
+                ("gemini", "gemini-3.5-flash-lite"),
+                ("groq", "llama-3.3-70b-versatile"),
                 ("openrouter", "deepseek/deepseek-r1:free"),
                 ("openrouter", "meta-llama/llama-3.3-70b-instruct:free"),
-                ("groq", "llama-3.3-70b-versatile"),
                 ("huggingface", "meta-llama/Llama-3.3-70B-Instruct"),
                 ("cerebras", "llama3.1-70b"),
                 ("sambanova", "Meta-Llama-3.3-70B-Instruct"),
@@ -74,7 +78,8 @@ class SmartRouter:
             "name": "⚖️ Balanced Frontier Intelligence",
             "description": "Optimal balance of quality, speed and conversational fluency",
             "chain": [
-                ("gemini", "gemini-flash-latest"),
+                ("gemini", "gemini-3.1-flash-lite"),
+                ("gemini", "gemini-3.5-flash-lite"),
                 ("groq", "llama-3.3-70b-versatile"),
                 ("openai", "gpt-4o"),
                 ("anthropic", "claude-3-5-sonnet-20241022"),
@@ -124,7 +129,8 @@ class SmartRouter:
         messages: List[Dict[str, str]],
         profile_override: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = 2048
+        max_tokens: Optional[int] = 2048,
+        api_key_override: Optional[str] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Executes smart routing with automatic multi-provider fallback waterfall.
@@ -157,9 +163,7 @@ class SmartRouter:
         for provider_id, model in chain:
             meta = PROVIDERS_METADATA.get(provider_id, {})
             env_var = meta.get("env_var")
-            has_key = bool(GatewayConfig.get_key(env_var)) if env_var else False
 
-            # Special case for free tier: if openrouter or groq key exists, or if testing
             attempted_providers.append(f"{meta.get('name', provider_id)} ({model})")
 
             yield {
@@ -177,7 +181,8 @@ class SmartRouter:
                 model=model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                api_key_override=api_key_override
             ):
                 if chunk.get("error") or chunk.get("status") == "missing_key":
                     had_error = True
@@ -190,6 +195,7 @@ class SmartRouter:
                     break
                 else:
                     got_content = True
+                    chunk["content"] = chunk.get("delta", "")
                     yield chunk
 
             if got_content and not had_error:
@@ -197,7 +203,6 @@ class SmartRouter:
                 break
 
         if not success:
-            # All providers in chain had no active keys or failed. Provide helpful unified gateway setup instructions.
             help_message = (
                 f"\n\n### ⚡ OmniModel Gateway Status\n"
                 f"Attempted waterfall chain: {', '.join(attempted_providers)}.\n\n"
@@ -210,6 +215,7 @@ class SmartRouter:
             )
             yield {
                 "delta": help_message,
+                "content": help_message,
                 "done": True,
                 "provider": "omnimodel_gateway",
                 "model": "router_fallback"

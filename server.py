@@ -106,8 +106,10 @@ class ChatCompletionRequest(BaseModel):
     stream: Optional[bool] = False
 
 class KeyUpdateRequest(BaseModel):
-    env_var: str
-    value: str
+    env_var: Optional[str] = None
+    env_key: Optional[str] = None
+    value: Optional[str] = None
+    api_key: Optional[str] = None
 
 class ArenaRequest(BaseModel):
     models: List[Dict[str, str]] # [{"provider": "groq", "model": "llama-3.3-70b-versatile"}, ...]
@@ -338,9 +340,13 @@ async def clear_user_analytics():
 
 @app.post("/api/keys")
 async def update_api_key(req: KeyUpdateRequest):
-    success = GatewayConfig.set_key(req.env_var, req.value.strip())
+    target_var = (req.env_var or req.env_key or "").strip()
+    target_val = (req.value or req.api_key or "").strip()
+    if not target_var:
+        raise HTTPException(status_code=400, detail="Missing environment variable name")
+    success = GatewayConfig.set_key(target_var, target_val)
     if success:
-        return {"success": True, "message": f"Successfully updated {req.env_var}"}
+        return {"success": True, "message": f"Successfully updated {target_var}"}
     raise HTTPException(status_code=500, detail="Failed to write key to .env")
 
 @app.post("/api/ping/{provider_id}")
@@ -373,6 +379,7 @@ async def api_chat_stream(
         raw_messages = [{"role": "user", "content": "Hello"}]
 
     prompt_snippet = raw_messages[-1]["content"] if raw_messages else ""
+    api_key_override = request.headers.get("x-gemini-api-key") or request.headers.get("x-api-key") or None
     start_time = time.perf_counter()
 
     async def sse_generator():
@@ -387,17 +394,20 @@ async def api_chat_stream(
                 model=target_model,
                 messages=raw_messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                api_key_override=api_key_override
             ):
                 if chunk.get("delta"):
                     total_text.append(chunk["delta"])
+                chunk["content"] = chunk.get("delta", "")
                 yield f"data: {json.dumps(chunk)}\n\n"
         else:
             async for chunk in SmartRouter.route_and_execute_stream(
                 messages=raw_messages,
                 profile_override=profile,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                api_key_override=api_key_override
             ):
                 if chunk.get("provider"):
                     actual_provider = chunk["provider"]
@@ -405,6 +415,7 @@ async def api_chat_stream(
                     actual_model = chunk["model"]
                 if chunk.get("delta"):
                     total_text.append(chunk["delta"])
+                chunk["content"] = chunk.get("delta", "")
                 yield f"data: {json.dumps(chunk)}\n\n"
         
         latency = round((time.perf_counter() - start_time) * 1000, 1)
@@ -443,11 +454,13 @@ async def api_arena_stream(req: ArenaRequest):
                 temperature=req.temperature or 0.7,
                 max_tokens=req.max_tokens or 2048
             ):
+                text_piece = chunk.get("delta", "") or chunk.get("content", "")
                 item = {
                     "arena_worker_id": worker_id,
                     "provider": prov,
                     "model": mod,
-                    "delta": chunk.get("delta", ""),
+                    "delta": text_piece,
+                    "content": text_piece,
                     "done": chunk.get("done", False),
                     "latency_ms": chunk.get("latency_ms", 0),
                     "error": chunk.get("error", False)

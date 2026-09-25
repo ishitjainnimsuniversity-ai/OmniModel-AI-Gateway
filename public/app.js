@@ -640,9 +640,13 @@ async function submitChatMessage() {
             stream: true
         };
 
+        const reqHeaders = { 'Content-Type': 'application/json' };
+        const storedGemini = localStorage.getItem('omni_key_GEMINI_API_KEY');
+        if (storedGemini) reqHeaders['x-gemini-api-key'] = storedGemini;
+
         const res = await fetch('/api/chat/stream', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: reqHeaders,
             body: JSON.stringify(payload)
         });
 
@@ -665,9 +669,10 @@ async function submitChatMessage() {
 
                     try {
                         const parsed = JSON.parse(dataStr);
-                        if (parsed.content) {
-                            fullText += parsed.content;
-                            state.tokenCounter += parsed.content.split(/\s+/).length || 1;
+                        const textChunk = parsed.delta ?? parsed.content ?? (parsed.choices && parsed.choices[0]?.delta?.content) ?? "";
+                        if (textChunk) {
+                            fullText += textChunk;
+                            state.tokenCounter += textChunk.split(/\s+/).length || 1;
 
                             if (window.marked) {
                                 bodyEl.innerHTML = marked.parse(fullText);
@@ -834,10 +839,13 @@ async function launchArenaDuel() {
     selectedModels.forEach((modelKey, index) => {
         const [provider, model] = modelKey.split('/');
         const startTime = performance.now();
+        const reqHeaders = { 'Content-Type': 'application/json' };
+        const storedGemini = localStorage.getItem('omni_key_GEMINI_API_KEY');
+        if (storedGemini) reqHeaders['x-gemini-api-key'] = storedGemini;
 
         fetch('/api/chat/stream', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: reqHeaders,
             body: JSON.stringify({ prompt: prompt, provider: provider, model: model, stream: true })
         }).then(res => {
             const reader = res.body.getReader();
@@ -860,11 +868,18 @@ async function launchArenaDuel() {
                         if (line.startsWith('data: ')) {
                             try {
                                 const p = JSON.parse(line.slice(6));
-                                if (p.content) text += p.content;
+                                const chunkText = p.delta ?? p.content ?? (p.choices && p.choices[0]?.delta?.content) ?? "";
+                                if (chunkText) text += chunkText;
                             } catch(e) {}
                         }
                     }
-                    if (bodyEl) bodyEl.innerText = text;
+                    if (bodyEl) {
+                        if (window.marked) {
+                            bodyEl.innerHTML = marked.parse(text);
+                        } else {
+                            bodyEl.innerText = text;
+                        }
+                    }
                     readChunk();
                 });
             }
@@ -913,7 +928,7 @@ async function loadProviders() {
                     <button class="ping-btn" onclick="pingProvider('${pid}')" id="ping-${pid}">
                         <i class="fa-solid fa-satellite-dish"></i> Ping Latency
                     </button>
-                    <button class="config-btn" onclick="openKeyModal('${pid}', '${p.name}', '${p.env_key}', '${p.docs_url}')">
+                    <button class="config-btn" onclick="openKeyModal('${pid}', '${p.name}', '${p.env_var || p.env_key}', '${p.free_key_url || p.docs_url || '#'}')">
                         <i class="fa-solid fa-gear"></i> ${isConfigured ? 'Update Key' : 'Configure Key'}
                     </button>
                 </div>
@@ -936,9 +951,16 @@ window.pingProvider = async function(pid) {
     if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Pinging...';
     const start = performance.now();
     try {
-        await fetch(`/api/providers`);
-        const lat = Math.round(performance.now() - start);
-        if (btn) btn.innerHTML = `<span style="color:var(--accent-emerald)"><i class="fa-solid fa-check"></i> ${lat} ms</span>`;
+        const res = await fetch(`/api/ping/${pid}`, { method: 'POST' });
+        const data = await res.json();
+        const lat = data.latency_ms || Math.round(performance.now() - start);
+        if (data.status === 'active') {
+            if (btn) btn.innerHTML = `<span style="color:var(--accent-emerald)"><i class="fa-solid fa-check"></i> ${lat} ms</span>`;
+        } else if (data.status === 'missing_key') {
+            if (btn) btn.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-key"></i> No Key</span>`;
+        } else {
+            if (btn) btn.innerHTML = `<span style="color:var(--accent-rose)"><i class="fa-solid fa-xmark"></i> ${data.message || 'Error'}</span>`;
+        }
     } catch(e) {
         if (btn) btn.innerHTML = `<span style="color:var(--accent-rose)">Offline</span>`;
     }
@@ -954,10 +976,10 @@ window.openKeyModal = function(pid, name, envKey, docsUrl) {
 
     if (!modal) return;
     nameEl.innerText = `Configure ${name}`;
-    descEl.innerText = `Enter the API key for ${name}. Saved locally in .env.`;
+    descEl.innerText = `Enter the API key for ${name}. Saved locally in .env and browser cache.`;
     envLabel.innerText = `Environment Variable: ${envKey}`;
     linkEl.href = docsUrl || '#';
-    keyInput.value = '';
+    keyInput.value = localStorage.getItem('omni_key_' + envKey) || '';
 
     modal.classList.remove('hidden');
     sfx.playClick();
@@ -966,12 +988,13 @@ window.openKeyModal = function(pid, name, envKey, docsUrl) {
         const val = keyInput.value.trim();
         if (!val) return;
         try {
+            localStorage.setItem('omni_key_' + envKey, val);
             await fetch('/api/keys', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ env_key: envKey, api_key: val })
+                body: JSON.stringify({ env_var: envKey, value: val, env_key: envKey, api_key: val })
             });
-            showToast(`${name} key updated!`);
+            showToast(`${name} key successfully saved!`);
             modal.classList.add('hidden');
             loadProviders();
             sfx.playComplete();

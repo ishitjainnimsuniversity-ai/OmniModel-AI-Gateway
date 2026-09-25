@@ -31,7 +31,8 @@ class GatewayConfig:
         val = os.getenv(env_var)
         if val and val.strip():
             clean = val.strip().strip("'\"")
-            return clean if len(clean) > 0 else None
+            if len(clean) > 0:
+                return clean
         return None
 
     @classmethod

@@ -65,7 +65,8 @@ class UniversalAdapter:
         model: str,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: Optional[int] = 2048
+        max_tokens: Optional[int] = 2048,
+        api_key_override: Optional[str] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Yields normalized streaming SSE chunks:
@@ -74,11 +75,11 @@ class UniversalAdapter:
         start_time = time.perf_counter()
         meta = PROVIDERS_METADATA.get(provider_id)
         if not meta:
-            yield {"delta": f"[Error: Unknown provider '{provider_id}']", "done": True, "error": True}
+            yield {"delta": f"[Error: Unknown provider '{provider_id}']", "content": f"[Error: Unknown provider '{provider_id}']", "done": True, "error": True}
             return
 
         env_var = meta.get("env_var")
-        api_key = GatewayConfig.get_key(env_var) if env_var else None
+        api_key = api_key_override or (GatewayConfig.get_key(env_var) if env_var else None)
 
         # Check if key is required and missing
         if provider_id != "ollama" and not api_key:
@@ -104,7 +105,7 @@ class UniversalAdapter:
 
         target_url, headers, format_type = cls._prepare_headers_and_url(provider_id, model, api_key)
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=25.0, verify=False) as client:
             try:
                 if format_type == "gemini":
                     # Convert to Gemini format
@@ -146,6 +147,7 @@ class UniversalAdapter:
                                 chunk_text = w + (" " if i < len(words) - 1 else "")
                                 yield {
                                     "delta": chunk_text,
+                                    "content": chunk_text,
                                     "done": False,
                                     "provider": provider_id,
                                     "model": model,
@@ -153,6 +155,7 @@ class UniversalAdapter:
                                 }
                             yield {
                                 "delta": "",
+                                "content": "",
                                 "done": True,
                                 "provider": provider_id,
                                 "model": model,
@@ -160,10 +163,12 @@ class UniversalAdapter:
                                 "total_chars": len(full_text)
                             }
                         else:
-                            yield {"delta": "No output generated.", "done": True, "provider": provider_id, "model": model}
+                            yield {"delta": "No output generated.", "content": "No output generated.", "done": True, "provider": provider_id, "model": model}
                     else:
+                        err_text = f"Gemini API Error ({response.status_code}): {response.text}"
                         yield {
-                            "delta": f"Gemini API Error ({response.status_code}): {response.text}",
+                            "delta": err_text,
+                            "content": err_text,
                             "done": True,
                             "error": True,
                             "provider": provider_id,
@@ -281,6 +286,7 @@ class UniversalAdapter:
                                             if content:
                                                 yield {
                                                     "delta": content,
+                                                    "content": content,
                                                     "done": False,
                                                     "provider": provider_id,
                                                     "model": model,
@@ -291,6 +297,7 @@ class UniversalAdapter:
 
                             yield {
                                 "delta": "",
+                                "content": "",
                                 "done": True,
                                 "provider": provider_id,
                                 "model": model,
@@ -304,13 +311,16 @@ class UniversalAdapter:
                         if resp.status_code == 200:
                             data = resp.json()
                             content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                            yield {"delta": content, "done": True, "provider": provider_id, "model": model, "latency_ms": latency}
+                            yield {"delta": content, "content": content, "done": True, "provider": provider_id, "model": model, "latency_ms": latency}
                         else:
-                            yield {"delta": f"API Error: {resp.text}", "done": True, "error": True, "provider": provider_id}
+                            err_msg = f"API Error: {resp.text}"
+                            yield {"delta": err_msg, "content": err_msg, "done": True, "error": True, "provider": provider_id}
 
             except Exception as e:
+                err_msg = f"\n[Connection Exception on {provider_id} ({model})]: {str(e)}"
                 yield {
-                    "delta": f"\n[Connection Exception on {provider_id} ({model})]: {str(e)}",
+                    "delta": err_msg,
+                    "content": err_msg,
                     "done": True,
                     "error": True,
                     "provider": provider_id,
@@ -332,7 +342,7 @@ class UniversalAdapter:
         if provider_id == "ollama":
             # Test local ollama
             try:
-                async with httpx.AsyncClient(timeout=3.0) as client:
+                async with httpx.AsyncClient(timeout=3.0, verify=False) as client:
                     resp = await client.get("http://localhost:11434/api/tags")
                     latency = round((time.perf_counter() - start) * 1000, 2)
                     if resp.status_code == 200:
