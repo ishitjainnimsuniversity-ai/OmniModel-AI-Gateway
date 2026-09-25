@@ -13,11 +13,11 @@ from collections import Counter
 import tempfile
 
 try:
-    DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-    DATA_DIR.mkdir(exist_ok=True)
-except Exception:
+    # Use tempfile directory for guaranteed writable storage across Vercel / serverless / local
     DATA_DIR = Path(tempfile.gettempdir()) / "omnimodel_data"
-    DATA_DIR.mkdir(exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    DATA_DIR = Path(tempfile.gettempdir())
 
 ANALYTICS_FILE = DATA_DIR / "analytics.json"
 

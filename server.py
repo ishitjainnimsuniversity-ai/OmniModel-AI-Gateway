@@ -48,13 +48,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
+# Mount static files safely (only if directory exists)
 PUBLIC_DIR = BASE_DIR / "public"
-try:
-    PUBLIC_DIR.mkdir(exist_ok=True)
-except Exception:
-    pass
-app.mount("/static", StaticFiles(directory=str(PUBLIC_DIR)), name="static")
+if PUBLIC_DIR.exists() and PUBLIC_DIR.is_dir():
+    try:
+        app.mount("/static", StaticFiles(directory=str(PUBLIC_DIR)), name="static")
+    except Exception as e:
+        print(f"Warning: could not mount static files: {e}")
+
 
 @app.get("/style.css")
 async def get_style_css():
@@ -326,22 +327,26 @@ async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
 # 3. Provider Management & Live Health Checks
 # -----------------------------------------------------------------------------
 @app.get("/api/providers")
+@app.get("/providers")
 async def get_providers():
     status = GatewayConfig.get_active_providers_status(PROVIDERS_METADATA)
     return {"success": True, "providers": status, "total": len(status)}
 
 @app.get("/api/analytics")
+@app.get("/analytics")
 async def get_user_analytics():
     """Returns analytics of users and requests who have used the app"""
     summary = AnalyticsTracker.get_summary()
     return {"success": True, "analytics": summary}
 
 @app.post("/api/analytics/clear")
+@app.post("/analytics/clear")
 async def clear_user_analytics():
     AnalyticsTracker.clear_records()
     return {"success": True, "message": "Analytics history cleared"}
 
 @app.post("/api/keys")
+@app.post("/keys")
 async def update_api_key(req: KeyUpdateRequest):
     target_var = (req.env_var or req.env_key or "").strip()
     target_val = (req.value or req.api_key or "").strip()
@@ -353,14 +358,21 @@ async def update_api_key(req: KeyUpdateRequest):
     raise HTTPException(status_code=500, detail="Failed to write key to .env")
 
 @app.post("/api/ping/{provider_id}")
+@app.post("/ping/{provider_id}")
 async def ping_provider(provider_id: str):
     result = await UniversalAdapter.test_ping(provider_id)
     return result
+
+@app.get("/api/health")
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "OmniModel AI Gateway", "version": "2.0.0"}
 
 # -----------------------------------------------------------------------------
 # 4. Interactive Dashboard SSE Streaming Endpoints
 # -----------------------------------------------------------------------------
 @app.post("/api/chat/stream")
+@app.post("/chat/stream")
 async def api_chat_stream(
     request: Request,
     messages: Optional[List[Dict[str, Any]]] = Body(None),
@@ -443,6 +455,7 @@ async def api_chat_stream(
 # 5. Multi-Model Arena Parallel Broadcast Endpoint
 # -----------------------------------------------------------------------------
 @app.post("/api/arena/stream")
+@app.post("/arena/stream")
 async def api_arena_stream(req: ArenaRequest):
     raw_messages = [{"role": m.role, "content": m.content} for m in req.messages]
     

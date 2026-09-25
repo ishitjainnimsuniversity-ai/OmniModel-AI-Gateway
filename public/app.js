@@ -25,7 +25,8 @@ const state = {
 // Automatic default key initialization for Vercel deployment
 try {
     const DEFAULT_KEY_B64 = "QVEuQWI4Uk42S09WRlZwM3ByLWw2bmRCZG5yZHFWMmc0UjNta05GS0ZyYXhON214WjIxQ1E=";
-    if (!localStorage.getItem('omni_key_GEMINI_API_KEY')) {
+    const existing = localStorage.getItem('omni_key_GEMINI_API_KEY');
+    if (!existing || !existing.startsWith('AQ.')) {
         localStorage.setItem('omni_key_GEMINI_API_KEY', atob(DEFAULT_KEY_B64));
     }
 } catch(e) {}
