@@ -506,6 +506,57 @@ async def api_arena_stream(req: ArenaRequest):
 
     return StreamingResponse(sse_arena_generator(), media_type="text/event-stream")
 
+# -----------------------------------------------------------------------------
+# 5. IoT & Microcontroller Endpoints (ESP32, ILI9341, Arduino)
+# -----------------------------------------------------------------------------
+@app.get("/api/iot/chat")
+@app.post("/api/iot/chat")
+async def iot_chat_endpoint(
+    request: Request,
+    q: Optional[str] = None,
+    prompt: Optional[str] = Body(None),
+    max_words: int = 70
+):
+    """
+    Ultra-lightweight endpoint for ESP32/microcontrollers with small LCDs.
+    Returns plain, clean, wrapped text without complex Markdown/HTML.
+    """
+    user_prompt = q or prompt or "Hello"
+    raw_messages = [
+        {
+            "role": "system",
+            "content": f"You are an AI assistant for a 2.4-inch microcontroller screen. Answer concisely in under {max_words} words. Do NOT use markdown tables, code blocks, or bold formatting. Just clear, readable text."
+        },
+        {"role": "user", "content": user_prompt}
+    ]
+
+    full_text = []
+    async for chunk in SmartRouter.route_and_execute_stream(
+        messages=raw_messages,
+        profile_override="speed",
+        temperature=0.6,
+        max_tokens=256
+    ):
+        delta = chunk.get("delta", "")
+        if delta:
+            full_text.append(delta)
+
+    raw_response = "".join(full_text).strip()
+    # Clean up formatting for 240x320 LCDs
+    clean = re.sub(r'[*_#`>]', '', raw_response)
+    clean = re.sub(r'\n{3,}', '\n\n', clean).strip()
+
+    # If client accepts plain text, return plain string for minimal microcontroller RAM usage
+    accept = request.headers.get("accept", "")
+    if "text/plain" in accept or "ESP32" in request.headers.get("user-agent", ""):
+        return Response(content=clean, media_type="text/plain")
+
+    return {
+        "prompt": user_prompt,
+        "text": clean,
+        "length": len(clean)
+    }
+
 def main():
     port = GatewayConfig.PORT
     host = GatewayConfig.HOST
