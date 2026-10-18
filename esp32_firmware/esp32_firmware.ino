@@ -150,7 +150,7 @@ void drawHeader(const char* title) {
     }
 }
 
-void printWordWrapped(const String& text, int lineStartX = 8, int maxX = 312) {
+void printWordWrapped(const String& text, int lineStartX = 8, int maxX = 312, int maxY = 216) {
     if (!screenReady) return;
     int curX = tft.getCursorX();
     int curY = tft.getCursorY();
@@ -161,6 +161,11 @@ void printWordWrapped(const String& text, int lineStartX = 8, int maxX = 312) {
     int i = 0;
     
     while (i < len) {
+        if (curY + lineHeight > maxY) {
+            tft.print("...");
+            break;
+        }
+
         char c = text.charAt(i);
         if (c == '\r') {
             i++;
@@ -168,6 +173,10 @@ void printWordWrapped(const String& text, int lineStartX = 8, int maxX = 312) {
         }
         if (c == '\n') {
             curY += lineHeight;
+            if (curY + lineHeight > maxY) {
+                tft.print("...");
+                break;
+            }
             curX = lineStartX;
             tft.setCursor(curX, curY);
             i++;
@@ -180,6 +189,10 @@ void printWordWrapped(const String& text, int lineStartX = 8, int maxX = 312) {
                 curX += charWidth;
             } else {
                 curY += lineHeight;
+                if (curY + lineHeight > maxY) {
+                    tft.print("...");
+                    break;
+                }
                 curX = lineStartX;
                 tft.setCursor(curX, curY);
             }
@@ -199,6 +212,10 @@ void printWordWrapped(const String& text, int lineStartX = 8, int maxX = 312) {
         // Wrap word to next line if it exceeds screen margin
         if (curX + wordWidth > maxX && curX > lineStartX) {
             curY += lineHeight;
+            if (curY + lineHeight > maxY) {
+                tft.print("...");
+                break;
+            }
             curX = lineStartX;
             tft.setCursor(curX, curY);
         }
@@ -350,18 +367,22 @@ void askGenesisAI(String prompt) {
             tft.setTextSize(1);
             tft.setCursor(10, 46);
             tft.print("Q: ");
-            printWordWrapped(prompt, 26, 310);
+            printWordWrapped(prompt, 26, 310, 80);
 
-            tft.drawFastHLine(8, 72, 304, 0x18C3);
-            tft.setCursor(10, 76);
+            int qEndY = tft.getCursorY() + 6;
+            if (qEndY < 68) qEndY = 68;
+            if (qEndY > 88) qEndY = 88;
+
+            tft.drawFastHLine(8, qEndY, 304, 0x18C3);
+            tft.setCursor(10, qEndY + 4);
             tft.setTextColor(ILI9341_YELLOW);
             tft.setTextSize(1);
             tft.println("GENESIS AI ANSWER:");
             
             tft.setTextColor(ILI9341_WHITE);
             tft.setTextSize(1);
-            tft.setCursor(10, 89);
-            printWordWrapped(answer, 10, 310);
+            tft.setCursor(10, qEndY + 16);
+            printWordWrapped(answer, 10, 310, 216);
         }
     } else {
         Serial.println("[Error] Both Cloud and Local Gateway queries timed out or failed.");
@@ -451,6 +472,17 @@ void setup() {
 // Main Loop
 // -----------------------------------------------------------------------------
 void loop() {
+    // Wi-Fi Auto-Reconnect Watchdog
+    static unsigned long lastWifiCheck = 0;
+    if (millis() - lastWifiCheck > 10000) {
+        lastWifiCheck = millis();
+        if (WiFi.status() != WL_CONNECTED) {
+            Serial.println("[Wi-Fi Watchdog] Reconnecting to 'Lost Case '...");
+            WiFi.disconnect();
+            WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+        }
+    }
+
     // Read question from Serial Monitor
     if (Serial.available()) {
         String input = Serial.readStringUntil('\n');

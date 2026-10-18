@@ -859,7 +859,7 @@ function renderChatMessages() {
         feed.innerHTML = `
             <div class="chatgpt-welcome" id="chatgpt-welcome-screen">
                 <div class="welcome-hero-logo">
-                    <img src="logo.png" alt="GENESIS AI 5.0" class="hero-logo-img">
+                    <div class="hero-logo-icon" style="width:72px; height:72px; border-radius:18px; background:linear-gradient(135deg, #00f0ff, #3b82f6); display:flex; align-items:center; justify-content:center; color:#000; font-size:36px; font-weight:900; box-shadow:0 0 35px rgba(0,240,255,0.5);"><i class="fa-solid fa-atom"></i></div>
                     <div class="hero-logo-halo"></div>
                 </div>
                 <h1>What can I help with today?</h1>

@@ -23,16 +23,11 @@
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
-    /* High-Tech Technical LCD Background using User's Downloaded AI Image */
+    /* Ultra-Clean Deep OLED Cyber Canvas (Zero Image Dependencies) */
     .tech-lcd-bg {
       background-color: #000000;
-      background-image: url('tech_circuit_animated.gif');
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-      image-rendering: -webkit-optimize-contrast;
-      image-rendering: crisp-edges;
-      transition: background-image 0.25s ease;
+      background-image: none !important;
+      position: relative;
     }
     .crt-scanlines {
       background: linear-gradient(
@@ -188,8 +183,8 @@
           <button onclick="showTelemetry()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-amber-400 font-semibold flex items-center gap-1">
             <span>📊</span> <span>TELEMETRY</span>
           </button>
-          <button id="bg-toggle" onclick="cycleBackground()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-purple-400 font-semibold flex items-center gap-1">
-            <span>🖼️</span> <span id="bg-label">BG: GIF MODE</span>
+          <button id="theme-toggle" onclick="toggleOledMode()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-cyan-400 font-semibold flex items-center gap-1">
+            <span>🌌</span> <span id="theme-label">OLED BLACK</span>
           </button>
         </div>
         <button id="sfx-toggle" onclick="toggleAudio()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-emerald-400 font-semibold flex items-center gap-1">
@@ -312,20 +307,19 @@
       document.getElementById('sfx-label').textContent = sfxEnabled ? 'SFX ON' : 'SFX OFF';
     }
 
-    const backgrounds = [
-      { name: "GIF MODE", url: "tech_circuit_animated.gif" },
-      { name: "HD CIRCUIT", url: "tech_bg.jpg" },
-      { name: "QUANTUM", url: "quantum_core.jpg" },
-      { name: "CYBER", url: "ai_bg.jpg" }
-    ];
-    let currentBgIdx = 0;
-
-    function cycleBackground() {
-      currentBgIdx = (currentBgIdx + 1) % backgrounds.length;
-      const bg = backgrounds[currentBgIdx];
+    let oledPure = true;
+    function toggleOledMode() {
+      oledPure = !oledPure;
       const lcd = document.getElementById('lcd-display');
-      lcd.style.backgroundImage = `url('${bg.url}')`;
-      document.getElementById('bg-label').textContent = 'BG: ' + bg.name;
+      if (oledPure) {
+        lcd.style.backgroundColor = '#000000';
+        lcd.style.backgroundImage = 'none';
+        document.getElementById('theme-label').textContent = 'OLED BLACK';
+      } else {
+        lcd.style.backgroundColor = '#030712';
+        lcd.style.backgroundImage = 'radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.08) 0%, rgba(0, 0, 0, 0.95) 100%)';
+        document.getElementById('theme-label').textContent = 'CYBER GLOW';
+      }
     }
 
     function setQuery(text) {
@@ -440,7 +434,7 @@
 
       if (!gotAnswer) {
         hudStatus.innerText = "STATUS: ERROR";
-        typeWriter("Could not connect to Gateway at " + (window.location.hostname || "10.22.163.200") + ":8000. Please verify the OmniModel server is running.");
+        typeWriter("Could not connect to Gateway at " + (window.location.hostname || "10.22.163.78") + ":8000. Please verify the OmniModel server is running.");
       }
     }
 
