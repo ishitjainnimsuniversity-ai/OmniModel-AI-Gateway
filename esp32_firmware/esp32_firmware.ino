@@ -34,18 +34,64 @@
 const char* WIFI_SSID     = "Lost Case ";
 const char* WIFI_PASSWORD = "453441C1";
 
-// ESP32-C5 SPI Pins for MSP2402 Display
+// ESP32-C5 Hardware SPI Pins for MSP2402 2.4" Display
+#define TFT_SCK  10
+#define TFT_MISO 9
+#define TFT_MOSI 8
 #define TFT_CS   6
 #define TFT_DC   7
 #define TFT_RST  2
 #define TFT_BL   27
+#define TOUCH_CS 3
 
-// Gateway Endpoints (Primary Local Subnet & Cloud Fallback)
-const char* PRIMARY_GATEWAY_URL = "http://10.22.163.200:8000/api/iot/chat";
+// Gateway Endpoints (Primary Local Subnet 10.22.163.78 & Cloud Fallback)
+const char* PRIMARY_GATEWAY_URL = "http://10.22.163.78:8000/api/iot/chat";
+const char* FALLBACK_GATEWAY_URL = "http://10.22.163.200:8000/api/iot/chat";
 const char* CLOUD_GATEWAY_URL   = "https://OmniModel-AI-Gateway.vercel.app/api/iot/chat";
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 bool screenReady = false;
+
+// -----------------------------------------------------------------------------
+// Native Circuit Board Background Drawing Engine for 2.4" LCD
+// -----------------------------------------------------------------------------
+void drawCircuitBoardBackground() {
+    if (!screenReady) return;
+    
+    // Draw subtle golden copper circuit traces across background
+    tft.drawFastHLine(20, 60, 280, 0x5285);
+    tft.drawFastHLine(20, 62, 140, 0x9460);
+    tft.drawLine(160, 62, 190, 92, 0x9460);
+    tft.drawFastHLine(190, 92, 110, 0x9460);
+    
+    tft.drawFastHLine(20, 200, 280, 0x5285);
+    tft.drawFastHLine(50, 204, 180, 0x9460);
+    tft.drawLine(230, 204, 250, 184, 0x9460);
+    tft.drawFastHLine(250, 184, 50, 0x9460);
+
+    // Vertical bus traces with circuit solder vias
+    tft.drawFastVLine(40, 60, 140, 0x3186);
+    tft.fillCircle(40, 60, 2, 0xFD20);
+    tft.fillCircle(40, 200, 2, 0xFD20);
+
+    tft.drawFastVLine(280, 60, 140, 0x3186);
+    tft.fillCircle(280, 60, 2, 0xFD20);
+    tft.fillCircle(280, 200, 2, 0xFD20);
+
+    // Central Processor Die Outline (Watermark on PCB)
+    tft.drawRect(95, 85, 130, 90, 0x21A7);
+    tft.drawRect(97, 87, 126, 86, 0x10A2);
+    
+    // Processor Golden Pins
+    for (int p = 105; p < 215; p += 8) {
+        tft.drawFastVLine(p, 80, 5, 0xFD20);   // Top pins
+        tft.drawFastVLine(p, 175, 5, 0xFD20);  // Bottom pins
+    }
+    for (int p = 93; p < 170; p += 8) {
+        tft.drawFastHLine(90, p, 5, 0xFD20);   // Left pins
+        tft.drawFastHLine(225, p, 5, 0xFD20);  // Right pins
+    }
+}
 
 // -----------------------------------------------------------------------------
 // UI Screen Drawing Functions
@@ -54,6 +100,9 @@ void drawHeader(const char* title) {
     if (!screenReady) return;
     tft.fillScreen(ILI9341_BLACK);
     
+    // Draw native circuit board watermark across background
+    drawCircuitBoardBackground();
+
     // Top Cyber HUD Bar (Deep Cyber Blue)
     tft.fillRect(0, 0, 320, 28, 0x0113);
     tft.drawFastHLine(0, 27, 320, ILI9341_CYAN);
@@ -219,7 +268,7 @@ void askGenesisAI(String prompt) {
             http.setReuse(false);
             http.setUserAgent("ESP32-C5-Hardware-Agent");
             http.addHeader("Accept", "text/plain");
-            http.setTimeout(12000);
+            http.setTimeout(8000);
 
             int httpCode = http.GET();
             if (httpCode == 200) {
@@ -228,6 +277,32 @@ void askGenesisAI(String prompt) {
                 Serial.printf("[Gateway Success 200 OK]\n");
             } else {
                 Serial.printf("[Gateway HTTP Error]: %d\n", httpCode);
+            }
+            http.end();
+        }
+    }
+
+    // 1b. Try Secondary Local Gateway if Primary failed
+    if (!success) {
+        HTTPClient http;
+        String localEndpoint2 = String(FALLBACK_GATEWAY_URL) + "?format=text&q=" + encodedPrompt;
+        Serial.print("Connecting to Fallback Local Gateway: ");
+        Serial.println(localEndpoint2);
+
+        if (http.begin(localEndpoint2)) {
+            http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+            http.setReuse(false);
+            http.setUserAgent("ESP32-C5-Hardware-Agent");
+            http.addHeader("Accept", "text/plain");
+            http.setTimeout(6000);
+
+            int httpCode = http.GET();
+            if (httpCode == 200) {
+                answer = http.getString();
+                success = true;
+                Serial.printf("[Fallback Local Gateway Success 200 OK]\n");
+            } else {
+                Serial.printf("[Fallback Local Gateway HTTP Error]: %d\n", httpCode);
             }
             http.end();
         }
@@ -310,7 +385,12 @@ void setup() {
     Serial.println("  Wi-Fi 6 Dual-Band + RISC-V 240MHz");
     Serial.println("==================================================");
 
-    // Initialize LCD (Safe to run even before screen is physically attached)
+    // Initialize LCD Backlight (Active HIGH)
+    pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, HIGH);
+
+    // Initialize Hardware SPI Bus with exact ESP32-C5 pin assignments
+    SPI.begin(TFT_SCK, TFT_MISO, TFT_MOSI, TFT_CS);
     tft.begin();
     tft.setRotation(1); // Landscape mode 320x240
     screenReady = true;

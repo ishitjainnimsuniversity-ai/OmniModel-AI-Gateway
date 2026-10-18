@@ -360,7 +360,7 @@
         "• Wi-Fi: 802.11ax Wi-Fi 6 (Lost Case)\n" +
         "• IP: 10.22.163.73 | RSSI: -48 dBm\n" +
         "• Display: 2.4\" ILI9341 SPI (320x240)\n" +
-        "• Gateway: 10.22.163.200:8000 [SPEED ROUTER]\n" +
+        "• Gateway: " + (window.location.host || "10.22.163.78:8000") + " [SPEED ROUTER]\n" +
         "• Dynamic RAM: 327KB | Flash: 4MB";
       typeWriter(stats);
     }
@@ -388,19 +388,22 @@
       promptEl.innerText = prompt;
       hudStatus.innerText = "STATUS: QUERYING ROUTER";
       hudWordcount.innerText = "...";
-      answerEl.innerHTML = '<span class="text-amber-400 animate-pulse">Querying OmniModel Gateway via Wi-Fi 6 (10.22.163.73)...</span>';
+      answerEl.innerHTML = '<span class="text-amber-400 animate-pulse">Querying OmniModel Gateway via Wi-Fi 6...</span>';
       btn.disabled = true;
       btn.classList.add('opacity-50');
 
       const startTime = performance.now();
       const queryParam = encodeURIComponent(prompt);
-      const candidates = [
-        '/api/iot/chat?format=text&q=' + queryParam,
-        'http://10.22.163.200:8000/api/iot/chat?format=text&q=' + queryParam
-      ];
-      if (window.location.hostname && window.location.hostname !== '10.22.163.200') {
+      const candidates = [];
+      if (window.location.protocol && window.location.protocol.startsWith('http')) {
+        candidates.push(window.location.origin + '/api/iot/chat?format=text&q=' + queryParam);
+        candidates.push('/api/iot/chat?format=text&q=' + queryParam);
+      }
+      candidates.push('http://10.22.163.78:8000/api/iot/chat?format=text&q=' + queryParam);
+      if (window.location.hostname && window.location.hostname !== '10.22.163.78') {
         candidates.push('http://' + window.location.hostname + ':8000/api/iot/chat?format=text&q=' + queryParam);
       }
+      candidates.push('http://localhost:8000/api/iot/chat?format=text&q=' + queryParam);
       candidates.push('http://127.0.0.1:8000/api/iot/chat?format=text&q=' + queryParam);
 
       let gotAnswer = false;

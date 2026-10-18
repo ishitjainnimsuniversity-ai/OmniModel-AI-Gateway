@@ -138,8 +138,16 @@ class ArenaRequest(BaseModel):
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 2048
 
+@app.get("/technology-8280864_1280.jpg")
+async def get_tech_jpg():
+    from fastapi.responses import FileResponse
+    p = PUBLIC_DIR / "technology-8280864_1280.jpg"
+    if p.exists():
+        return FileResponse(str(p), media_type="image/jpeg")
+    return JSONResponse(status_code=404, content={"error": "image not found"})
+
 # -----------------------------------------------------------------------------
-# 1. Web Dashboard Delivery
+# 1. Web Dashboard & 2.4" Hardware Screen Delivery
 # -----------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
@@ -147,6 +155,67 @@ async def serve_dashboard():
     if index_file.exists():
         return index_file.read_text(encoding="utf-8")
     return "<h1>OmniModel Gateway UI Loading...</h1>"
+
+@app.get("/screen", response_class=HTMLResponse)
+@app.get("/screen/", response_class=HTMLResponse)
+@app.get("/screen_preview.html", response_class=HTMLResponse)
+@app.get("/screen_preview", response_class=HTMLResponse)
+@app.get("/preview", response_class=HTMLResponse)
+@app.get("/preview/", response_class=HTMLResponse)
+@app.get("/display", response_class=HTMLResponse)
+@app.get("/display/", response_class=HTMLResponse)
+@app.get("/hardware", response_class=HTMLResponse)
+@app.get("/hardware/", response_class=HTMLResponse)
+@app.get("/iot", response_class=HTMLResponse)
+@app.get("/iot/", response_class=HTMLResponse)
+@app.get("/simulator", response_class=HTMLResponse)
+@app.get("/simulator/", response_class=HTMLResponse)
+@app.get("/lcd", response_class=HTMLResponse)
+@app.get("/lcd/", response_class=HTMLResponse)
+async def serve_screen_preview():
+    screen_file = PUBLIC_DIR / "screen_preview.html"
+    if screen_file.exists():
+        return screen_file.read_text(encoding="utf-8")
+    return "<h1>2.4\" Screen Preview Loading...</h1>"
+
+@app.get("/ip")
+async def get_server_ip():
+    import socket
+    hostname = socket.gethostname()
+    all_ips = []
+    wifi_ip = None
+    try:
+        import psutil
+        for iface, addrs in psutil.net_if_addrs().items():
+            for addr in addrs:
+                if addr.family == socket.AF_INET and not addr.address.startswith("127.") and not addr.address.startswith("169.254."):
+                    is_wifi = any(w in iface.lower() for w in ["wi-fi", "wireless", "wlan"])
+                    all_ips.append({"interface": iface, "ip": addr.address, "is_wifi": is_wifi})
+                    if is_wifi and not wifi_ip:
+                        wifi_ip = addr.address
+    except Exception:
+        pass
+
+    if not wifi_ip:
+        for it in all_ips:
+            if it["ip"].startswith("10.22.") or it["ip"].startswith("192.168."):
+                wifi_ip = it["ip"]
+                break
+    if not wifi_ip:
+        wifi_ip = "10.22.163.78"
+
+    port = GatewayConfig.PORT
+    return {
+        "status": "online",
+        "hostname": hostname,
+        "wifi_ip": wifi_ip,
+        "recommended_screen_url": f"http://{wifi_ip}:{port}/screen",
+        "recommended_dashboard_url": f"http://{wifi_ip}:{port}/",
+        "localhost_screen_url": f"http://localhost:{port}/screen",
+        "iot_endpoint": f"http://{wifi_ip}:{port}/api/iot/chat",
+        "all_interfaces": all_ips,
+        "port": port
+    }
 
 # -----------------------------------------------------------------------------
 # 2. OpenAI-Compatible Gateway Endpoints (/v1/models & /v1/chat/completions)
