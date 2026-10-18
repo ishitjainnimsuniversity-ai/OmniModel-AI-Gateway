@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GENESIS AI 5.0 - ESP32-C5 Hardware Screen Simulator</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @font-face {
+      font-family: 'PixelFont';
+      src: local('Courier New'), local('monospace');
+    }
+    .lcd-screen {
+      font-family: 'PixelFont', 'Consolas', 'Courier New', monospace;
+      letter-spacing: 0.3px;
+      text-shadow: 0 0 3px rgba(6, 182, 212, 0.45);
+    }
+    /* Hide scrollbars completely while keeping scrollability */
+    .no-scrollbar {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    /* High-Tech Technical LCD Background using User's Downloaded AI Image */
+    .tech-lcd-bg {
+      background-color: #000000;
+      background-image: url('tech_circuit_animated.gif');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+      transition: background-image 0.25s ease;
+    }
+    .crt-scanlines {
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.12) 50%
+      );
+      background-size: 100% 3px;
+    }
+    .tactile-btn {
+      transition: all 0.1s ease;
+      box-shadow: 0 3px 0 #1e293b, 0 4px 6px rgba(0,0,0,0.5);
+    }
+    .tactile-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #1e293b, 0 2px 3px rgba(0,0,0,0.4);
+    }
+    .cursor-blink {
+      animation: blink 0.8s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+  </style>
+</head>
+<body class="bg-neutral-950 text-neutral-100 antialiased p-3 md:p-6 flex flex-col items-center min-h-screen">
+
+  <div class="max-w-3xl w-full flex flex-col items-center">
+    
+    <!-- Title Header -->
+    <div class="text-center mb-5">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-500/50 text-cyan-400 text-xs font-semibold mb-2 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <span>ESP32-C5 ONLINE</span>
+        <span class="text-cyan-600">•</span>
+        <span>10.22.163.73</span>
+        <span class="text-cyan-600">•</span>
+        <span class="text-emerald-400">Wi-Fi 6 WPA3</span>
+      </div>
+      <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400 bg-clip-text text-transparent">
+        GENESIS AI 5.0 Hardware Client
+      </h1>
+      <p class="text-xs md:text-sm text-neutral-400 mt-1">
+        MSP2402 2.4" SPI TFT (240x320 ILI9341) • High-Tech Quantum Terminal Engine
+      </p>
+    </div>
+
+    <!-- PHYSICAL HARDWARE PCB CONTAINER -->
+    <div class="relative p-5 md:p-7 rounded-2xl bg-gradient-to-b from-red-950 via-red-900/80 to-red-950 border-2 border-red-700/70 shadow-[0_0_60px_rgba(239,68,68,0.3)] flex flex-col items-center">
+      
+      <!-- Screw Holes with Metallic Washers -->
+      <div class="absolute top-2.5 left-2.5 w-4 h-4 rounded-full border-2 border-amber-500/70 bg-neutral-900 shadow-inner flex items-center justify-center">
+        <div class="w-1.5 h-1.5 rounded-full bg-neutral-700"></div>
+      </div>
+      <div class="absolute top-2.5 right-2.5 w-4 h-4 rounded-full border-2 border-amber-500/70 bg-neutral-900 shadow-inner flex items-center justify-center">
+        <div class="w-1.5 h-1.5 rounded-full bg-neutral-700"></div>
+      </div>
+      <div class="absolute bottom-2.5 left-2.5 w-4 h-4 rounded-full border-2 border-amber-500/70 bg-neutral-900 shadow-inner flex items-center justify-center">
+        <div class="w-1.5 h-1.5 rounded-full bg-neutral-700"></div>
+      </div>
+      <div class="absolute bottom-2.5 right-2.5 w-4 h-4 rounded-full border-2 border-amber-500/70 bg-neutral-900 shadow-inner flex items-center justify-center">
+        <div class="w-1.5 h-1.5 rounded-full bg-neutral-700"></div>
+      </div>
+
+      <!-- Top PCB Pin Header Marking -->
+      <div class="w-full flex justify-between items-center px-4 mb-2 text-[10px] text-amber-400/80 font-mono tracking-wider">
+        <span>VCC GND CS RESET DC MOSI SCK LED MISO T_CS</span>
+        <span class="text-red-400 font-bold bg-black/40 px-2 py-0.5 rounded border border-red-900">MSP2402 (2.4" SPI)</span>
+      </div>
+
+      <!-- THE 320x240 LCD DISPLAY -->
+      <div id="lcd-display" class="relative w-[320px] h-[240px] md:w-[480px] md:h-[360px] rounded border-4 border-neutral-900 shadow-[inset_0_0_25px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col justify-between tech-lcd-bg crt-scanlines lcd-screen select-none">
+        
+        <!-- Cyber Corner HUD Reticles -->
+        <div class="absolute top-8 left-2 w-2.5 h-2.5 border-t border-l border-cyan-400/70 pointer-events-none"></div>
+        <div class="absolute top-8 right-2 w-2.5 h-2.5 border-t border-r border-cyan-400/70 pointer-events-none"></div>
+        <div class="absolute bottom-8 left-2 w-2.5 h-2.5 border-b border-l border-cyan-400/70 pointer-events-none"></div>
+        <div class="absolute bottom-8 right-2 w-2.5 h-2.5 border-b border-r border-cyan-400/70 pointer-events-none"></div>
+
+        <!-- LCD Top Header Bar -->
+        <div class="w-full bg-[#051c38]/90 border-b-2 border-cyan-400 px-3 py-1 flex items-center justify-between backdrop-blur-sm z-10">
+          <div class="text-cyan-400 font-bold text-xs md:text-sm tracking-wider flex items-center gap-1.5">
+            <span class="text-cyan-300">⚡</span>
+            <span id="lcd-title">GENESIS AI 5.0</span>
+          </div>
+          <!-- Signal Strength & Specs -->
+          <div class="flex items-center gap-2 text-[10px] text-cyan-300/90 font-mono">
+            <span id="hud-model" class="text-emerald-400 font-semibold">SPEED CORE</span>
+            <div class="flex items-end gap-0.5 h-3">
+              <span class="w-0.5 h-1 bg-cyan-400"></span>
+              <span class="w-0.5 h-1.5 bg-cyan-400"></span>
+              <span class="w-0.5 h-2 bg-cyan-400"></span>
+              <span class="w-0.5 h-2.5 bg-cyan-400 animate-pulse"></span>
+            </div>
+            <span>240x320</span>
+          </div>
+        </div>
+
+        <!-- High-Tech Telemetry Strip -->
+        <div class="w-full bg-cyan-950/40 border-b border-cyan-500/20 px-3 py-0.5 flex items-center justify-between text-[9px] font-mono text-cyan-300/80 z-10">
+          <span class="flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span id="hud-status">STATUS: READY</span>
+          </span>
+          <span id="hud-latency">LATENCY: 142ms</span>
+          <span id="hud-heap">HEAP: 276KB</span>
+        </div>
+
+        <!-- LCD Center Screen Body (Scrollbar completely hidden) -->
+        <div id="lcd-body" class="flex-1 p-2.5 flex flex-col justify-start text-xs leading-relaxed overflow-y-auto no-scrollbar z-10">
+          <div class="p-2.5 rounded-lg bg-black/60 border border-cyan-500/30 shadow-[0_0_20px_rgba(0,0,0,0.85)]">
+            <!-- Question Section -->
+            <div class="mb-2">
+              <div class="flex items-center gap-1 text-emerald-400 font-bold text-xs uppercase tracking-wide">
+                <span>▶</span> <span>Prompt:</span>
+              </div>
+              <div id="lcd-prompt" class="text-emerald-300 font-mono text-xs pl-2 mt-0.5">What is quantum computing in 20 words</div>
+            </div>
+
+            <!-- Answer Section (Zero leading indentation) -->
+            <div class="mt-1">
+              <div class="flex items-center justify-between text-amber-300 font-bold text-xs uppercase tracking-wide mb-1">
+                <span class="flex items-center gap-1">
+                  <span>✦</span> <span>Genesis AI Answer:</span>
+                </span>
+                <span id="hud-wordcount" class="text-[9px] text-amber-400/80 font-mono">22 words</span>
+              </div>
+              <div id="lcd-answer" class="text-neutral-100 text-xs md:text-sm leading-relaxed font-sans pl-2 border-l-2 border-amber-400/60" style="white-space: pre-wrap; word-break: break-word;">Quantum computing uses subatomic particles called qubits to perform complex calculations much faster than traditional computers by exploring many possibilities simultaneously.<span class="cursor-blink text-cyan-400 font-bold ml-0.5">▌</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LCD Bottom Status Bar -->
+        <div class="w-full bg-[#0d1624]/90 border-t border-neutral-700/80 px-3 py-1 flex items-center justify-between text-[10px] md:text-[11px] text-neutral-300 backdrop-blur-sm z-10">
+          <div class="flex items-center gap-1.5 truncate">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="lcd-status" class="truncate font-mono">WiFi: Lost Case (10.22.163.73) • -48dBm</span>
+          </div>
+          <span class="text-cyan-400 font-mono text-[10px] ml-2 shrink-0">RISC-V 240MHz</span>
+        </div>
+
+      </div>
+
+      <!-- Tactile Hardware Buttons on PCB -->
+      <div class="w-full flex justify-between items-center mt-3 px-2 flex-wrap gap-2">
+        <div class="flex gap-2 flex-wrap">
+          <button onclick="sendQuery()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-cyan-400 font-semibold flex items-center gap-1">
+            <span>⚡</span> <span>ASK AI</span>
+          </button>
+          <button onclick="clearScreen()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-neutral-300 font-semibold flex items-center gap-1">
+            <span>🧹</span> <span>CLR</span>
+          </button>
+          <button onclick="showTelemetry()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-amber-400 font-semibold flex items-center gap-1">
+            <span>📊</span> <span>TELEMETRY</span>
+          </button>
+          <button id="bg-toggle" onclick="cycleBackground()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-purple-400 font-semibold flex items-center gap-1">
+            <span>🖼️</span> <span id="bg-label">BG: GIF MODE</span>
+          </button>
+        </div>
+        <button id="sfx-toggle" onclick="toggleAudio()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-emerald-400 font-semibold flex items-center gap-1">
+          <span id="sfx-icon">🔊</span> <span id="sfx-label">SFX ON</span>
+        </button>
+      </div>
+
+      <!-- Bottom PCB silk print label -->
+      <div class="mt-2 text-[10px] font-mono text-amber-400/80 tracking-widest flex items-center gap-2">
+        <span>ILI9341 SPI DISPLAY</span> • <span>XPT2046 TOUCH</span> • <span>ESP32-C5 DUAL-BAND</span>
+      </div>
+
+    </div>
+
+    <!-- INTERACTIVE REAL-TIME CONTROLLER -->
+    <div class="w-full mt-6 bg-neutral-900 border border-neutral-800 rounded-xl p-5 shadow-lg">
+      <h3 class="text-sm font-semibold text-neutral-100 mb-1 flex items-center gap-2">
+        <span>🎮</span> Real-Time Hardware Interaction Console
+      </h3>
+      <p class="text-xs text-neutral-400 mb-4">
+        Type any question and press <kbd class="px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-cyan-400 font-mono text-[10px]">Enter</kbd> to query the live OmniModel AI Hub. Watch the 2.4" display format and render the answer in real-time.
+      </p>
+
+      <!-- Input Bar -->
+      <div class="flex gap-2 mb-3">
+        <input 
+          id="custom-input" 
+          type="text" 
+          placeholder="Ask anything (e.g. How does gravity work in 15 words?)" 
+          class="flex-1 px-3.5 py-2 text-xs md:text-sm rounded-lg bg-neutral-950 border border-neutral-700 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+          value="Explain black holes in 15 words"
+          onkeydown="if(event.key==='Enter') sendQuery()"
+        />
+        <button 
+          id="btn-send"
+          onclick="sendQuery()" 
+          class="px-4 py-2 text-xs md:text-sm font-semibold rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow transition active:scale-95 flex items-center gap-1.5"
+        >
+          <span>🚀</span> Send to Screen
+        </button>
+      </div>
+
+      <!-- Quick Preset Buttons -->
+      <div class="flex flex-wrap gap-2 text-xs">
+        <button onclick="setQuery('How does gravity work in 15 words')" class="px-2.5 py-1 rounded bg-neutral-950 border border-neutral-800 hover:border-cyan-500 text-neutral-400 hover:text-cyan-400 transition">
+          🌌 Gravity
+        </button>
+        <button onclick="setQuery('How do airplanes fly in 15 words')" class="px-2.5 py-1 rounded bg-neutral-950 border border-neutral-800 hover:border-cyan-500 text-neutral-400 hover:text-cyan-400 transition">
+          ✈️ Airplanes
+        </button>
+        <button onclick="setQuery('What is the speed of light in 10 words')" class="px-2.5 py-1 rounded bg-neutral-950 border border-neutral-800 hover:border-cyan-500 text-neutral-400 hover:text-cyan-400 transition">
+          ⚡ Speed of Light
+        </button>
+        <button onclick="setQuery('What is ESP32-C5 microcontroller in 15 words')" class="px-2.5 py-1 rounded bg-neutral-950 border border-neutral-800 hover:border-cyan-500 text-neutral-400 hover:text-cyan-400 transition">
+          📟 ESP32-C5 Specs
+        </button>
+        <button onclick="setQuery('Give a short motivating quote in 10 words')" class="px-2.5 py-1 rounded bg-neutral-950 border border-neutral-800 hover:border-cyan-500 text-neutral-400 hover:text-cyan-400 transition">
+          🌟 Motivating Quote
+        </button>
+      </div>
+
+      <!-- Live Pipeline Diagram -->
+      <div class="mt-5 pt-4 border-t border-neutral-800 flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-400">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span><b>Input:</b> Serial Prompt / Touch</span>
+        </div>
+        <span class="text-neutral-600">➔</span>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+          <span><b>Transport:</b> Wi-Fi 6 WPA3-SAE</span>
+        </div>
+        <span class="text-neutral-600">➔</span>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+          <span><b>Gateway:</b> OmniModel AI Hub (Port 8000)</span>
+        </div>
+        <span class="text-neutral-600">➔</span>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span><b>Output:</b> ILI9341 SPI (320x240)</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    let currentTypewriterTimer = null;
+    let sfxEnabled = true;
+    let audioCtx = null;
+
+    // Web Audio Synthesizer for High-Tech Terminal Clicks
+    function playTerminalClick() {
+      if (!sfxEnabled) return;
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1400 + Math.random() * 400, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.015, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.035);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.04);
+      } catch (e) {}
+    }
+
+    function toggleAudio() {
+      sfxEnabled = !sfxEnabled;
+      document.getElementById('sfx-icon').textContent = sfxEnabled ? '🔊' : '🔇';
+      document.getElementById('sfx-label').textContent = sfxEnabled ? 'SFX ON' : 'SFX OFF';
+    }
+
+    const backgrounds = [
+      { name: "GIF MODE", url: "tech_circuit_animated.gif" },
+      { name: "HD CIRCUIT", url: "tech_bg.jpg" },
+      { name: "QUANTUM", url: "quantum_core.jpg" },
+      { name: "CYBER", url: "ai_bg.jpg" }
+    ];
+    let currentBgIdx = 0;
+
+    function cycleBackground() {
+      currentBgIdx = (currentBgIdx + 1) % backgrounds.length;
+      const bg = backgrounds[currentBgIdx];
+      const lcd = document.getElementById('lcd-display');
+      lcd.style.backgroundImage = `url('${bg.url}')`;
+      document.getElementById('bg-label').textContent = 'BG: ' + bg.name;
+    }
+
+    function setQuery(text) {
+      document.getElementById('custom-input').value = text;
+      sendQuery();
+    }
+
+    function clearScreen() {
+      if (currentTypewriterTimer) {
+        clearTimeout(currentTypewriterTimer);
+        currentTypewriterTimer = null;
+      }
+      document.getElementById('lcd-title').innerText = "GENESIS AI 5.0";
+      document.getElementById('lcd-prompt').innerText = "Awaiting input...";
+      document.getElementById('lcd-answer').innerHTML = 'Ready for query.<span class="cursor-blink text-cyan-400 font-bold ml-0.5">▌</span>';
+      document.getElementById('hud-status').innerText = "STATUS: STANDBY";
+      document.getElementById('hud-wordcount').innerText = "0 words";
+      const btn = document.getElementById('btn-send');
+      btn.disabled = false;
+      btn.classList.remove('opacity-50');
+    }
+
+    function showTelemetry() {
+      if (currentTypewriterTimer) {
+        clearTimeout(currentTypewriterTimer);
+        currentTypewriterTimer = null;
+      }
+      document.getElementById('lcd-title').innerText = "SYSTEM TELEMETRY";
+      document.getElementById('lcd-prompt').innerText = "ESP32-C5 Hardware Diagnostics";
+      const stats = 
+        "• MCU: ESP32-C5 (RISC-V 240MHz)\n" +
+        "• Wi-Fi: 802.11ax Wi-Fi 6 (Lost Case)\n" +
+        "• IP: 10.22.163.73 | RSSI: -48 dBm\n" +
+        "• Display: 2.4\" ILI9341 SPI (320x240)\n" +
+        "• Gateway: 10.22.163.200:8000 [SPEED ROUTER]\n" +
+        "• Dynamic RAM: 327KB | Flash: 4MB";
+      typeWriter(stats);
+    }
+
+    async function sendQuery() {
+      const input = document.getElementById('custom-input');
+      const prompt = input.value.trim();
+      if (!prompt) return;
+
+      if (currentTypewriterTimer) {
+        clearTimeout(currentTypewriterTimer);
+        currentTypewriterTimer = null;
+      }
+
+      const titleEl = document.getElementById('lcd-title');
+      const promptEl = document.getElementById('lcd-prompt');
+      const answerEl = document.getElementById('lcd-answer');
+      const btn = document.getElementById('btn-send');
+      const hudStatus = document.getElementById('hud-status');
+      const hudLatency = document.getElementById('hud-latency');
+      const hudWordcount = document.getElementById('hud-wordcount');
+
+      // Update screen to thinking state
+      titleEl.innerText = "THINKING...";
+      promptEl.innerText = prompt;
+      hudStatus.innerText = "STATUS: QUERYING ROUTER";
+      hudWordcount.innerText = "...";
+      answerEl.innerHTML = '<span class="text-amber-400 animate-pulse">Querying OmniModel Gateway via Wi-Fi 6 (10.22.163.73)...</span>';
+      btn.disabled = true;
+      btn.classList.add('opacity-50');
+
+      const startTime = performance.now();
+      const queryParam = encodeURIComponent(prompt);
+      const candidates = [
+        '/api/iot/chat?format=text&q=' + queryParam,
+        'http://10.22.163.200:8000/api/iot/chat?format=text&q=' + queryParam
+      ];
+      if (window.location.hostname && window.location.hostname !== '10.22.163.200') {
+        candidates.push('http://' + window.location.hostname + ':8000/api/iot/chat?format=text&q=' + queryParam);
+      }
+      candidates.push('http://127.0.0.1:8000/api/iot/chat?format=text&q=' + queryParam);
+
+      let gotAnswer = false;
+      for (const url of candidates) {
+        try {
+          const res = await fetch(url);
+          if (res.ok) {
+            const raw = await res.text();
+            if (raw && raw.trim().length > 0) {
+              const latency = Math.round(performance.now() - startTime);
+              hudLatency.innerText = 'LATENCY: ' + latency + 'ms';
+              hudStatus.innerText = "STATUS: ACTIVE";
+
+              let textToType = raw.trim();
+              try {
+                const parsed = JSON.parse(textToType);
+                if (parsed && parsed.text) {
+                  textToType = parsed.text;
+                }
+              } catch (e) {}
+
+              const words = textToType.split(/\s+/).filter(Boolean).length;
+              hudWordcount.innerText = words + ' words';
+
+              typeWriter(textToType);
+              gotAnswer = true;
+              break;
+            }
+          }
+        } catch (err) {
+          // try next candidate
+        }
+      }
+
+      if (!gotAnswer) {
+        hudStatus.innerText = "STATUS: ERROR";
+        typeWriter("Could not connect to Gateway at " + (window.location.hostname || "10.22.163.200") + ":8000. Please verify the OmniModel server is running.");
+      }
+    }
+
+    function typeWriter(text) {
+      if (currentTypewriterTimer) {
+        clearTimeout(currentTypewriterTimer);
+        currentTypewriterTimer = null;
+      }
+
+      const titleEl = document.getElementById('lcd-title');
+      const answerEl = document.getElementById('lcd-answer');
+      const btn = document.getElementById('btn-send');
+
+      titleEl.innerText = "GENESIS AI 5.0";
+      answerEl.textContent = "";
+      
+      let i = 0;
+      const speed = 15;
+
+      function step() {
+        if (i <= text.length) {
+          const sliced = text.slice(0, i);
+          answerEl.innerHTML = escapeHtml(sliced) + '<span class="cursor-blink text-cyan-400 font-bold ml-0.5">▌</span>';
+          if (i % 3 === 0) playTerminalClick();
+          i++;
+          currentTypewriterTimer = setTimeout(step, speed);
+        } else {
+          currentTypewriterTimer = null;
+          btn.disabled = false;
+          btn.classList.remove('opacity-50');
+        }
+      }
+      step();
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>

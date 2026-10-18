@@ -90,13 +90,29 @@ async def get_ai_bg_jpg():
         return FileResponse(str(bg_path), media_type="image/jpeg")
     return JSONResponse(status_code=404, content={"error": "bg not found"})
 
-@app.get("/ai_wheel.png")
-async def get_ai_wheel_png():
+@app.get("/tech_bg.jpg")
+async def get_tech_bg_jpg():
     from fastapi.responses import FileResponse
-    wheel_path = PUBLIC_DIR / "ai_wheel.png"
-    if wheel_path.exists():
-        return FileResponse(str(wheel_path), media_type="image/png")
-    return JSONResponse(status_code=404, content={"error": "wheel not found"})
+    bg_path = PUBLIC_DIR / "tech_bg.jpg"
+    if bg_path.exists():
+        return FileResponse(str(bg_path), media_type="image/jpeg")
+    return JSONResponse(status_code=404, content={"error": "tech_bg not found"})
+
+@app.get("/quantum_core.jpg")
+async def get_quantum_core_jpg():
+    from fastapi.responses import FileResponse
+    core_path = PUBLIC_DIR / "quantum_core.jpg"
+    if core_path.exists():
+        return FileResponse(str(core_path), media_type="image/jpeg")
+    return JSONResponse(status_code=404, content={"error": "quantum_core not found"})
+
+@app.get("/tech_circuit_animated.gif")
+async def get_tech_circuit_animated_gif():
+    from fastapi.responses import FileResponse
+    gif_path = PUBLIC_DIR / "tech_circuit_animated.gif"
+    if gif_path.exists():
+        return FileResponse(str(gif_path), media_type="image/gif")
+    return JSONResponse(status_code=404, content={"error": "gif not found"})
 
 # Request Models
 class ChatMessage(BaseModel):
@@ -511,12 +527,15 @@ async def api_arena_stream(req: ArenaRequest):
 # 5. IoT & Microcontroller Endpoints (ESP32, ILI9341, Arduino)
 # -----------------------------------------------------------------------------
 @app.get("/api/iot/chat")
+@app.get("/api/iot/chat/")
 @app.post("/api/iot/chat")
+@app.post("/api/iot/chat/")
 async def iot_chat_endpoint(
     request: Request,
     q: Optional[str] = None,
     prompt: Optional[str] = Body(None),
-    max_words: int = 70
+    max_words: int = 70,
+    format: Optional[str] = None
 ):
     """
     Ultra-lightweight endpoint for ESP32/microcontrollers with small LCDs.
@@ -526,7 +545,7 @@ async def iot_chat_endpoint(
     raw_messages = [
         {
             "role": "system",
-            "content": f"You are an AI assistant for a 2.4-inch microcontroller screen. Answer concisely in under {max_words} words. Do NOT use markdown tables, code blocks, or bold formatting. Just clear, readable text."
+            "content": f"You are GENESIS AI 5.0 running on an ESP32 microcontroller with a 2.4-inch display. Answer the user prompt directly, accurately, and concisely in under {max_words} words. Never answer with canned replies or evade the question. Do not use asterisks, markdown, hashes, or bullet points. Output natural, clear, plain text."
         },
         {"role": "user", "content": user_prompt}
     ]
@@ -543,20 +562,17 @@ async def iot_chat_endpoint(
             full_text.append(delta)
 
     raw_response = "".join(full_text).strip()
-    # Clean up formatting for 240x320 LCDs
     clean = re.sub(r'[*_#`>]', '', raw_response)
     clean = re.sub(r'\n{3,}', '\n\n', clean).strip()
 
-    # If client accepts plain text, return plain string for minimal microcontroller RAM usage
-    accept = request.headers.get("accept", "")
-    if "text/plain" in accept or "ESP32" in request.headers.get("user-agent", ""):
-        return Response(content=clean, media_type="text/plain")
+    if format == "json":
+        return {
+            "prompt": user_prompt,
+            "text": clean,
+            "length": len(clean)
+        }
 
-    return {
-        "prompt": user_prompt,
-        "text": clean,
-        "length": len(clean)
-    }
+    return Response(content=clean, media_type="text/plain; charset=utf-8")
 
 def main():
     port = GatewayConfig.PORT

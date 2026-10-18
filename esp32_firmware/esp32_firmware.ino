@@ -40,9 +40,9 @@ const char* WIFI_PASSWORD = "453441C1";
 #define TFT_RST  2
 #define TFT_BL   27
 
-// Gateway Endpoints (Cloud & Local PC Fallback)
-const char* CLOUD_GATEWAY_URL = "https://OmniModel-AI-Gateway.vercel.app/api/iot/chat";
-const char* LOCAL_GATEWAY_URL = "http://10.22.163.200:8000/api/iot/chat";
+// Gateway Endpoints (Primary Local Subnet & Cloud Fallback)
+const char* PRIMARY_GATEWAY_URL = "http://10.22.163.200:8000/api/iot/chat";
+const char* CLOUD_GATEWAY_URL   = "https://OmniModel-AI-Gateway.vercel.app/api/iot/chat";
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 bool screenReady = false;
@@ -54,29 +54,125 @@ void drawHeader(const char* title) {
     if (!screenReady) return;
     tft.fillScreen(ILI9341_BLACK);
     
-    // Top Cyber HUD Bar
+    // Top Cyber HUD Bar (Deep Cyber Blue)
     tft.fillRect(0, 0, 320, 28, 0x0113);
-    tft.drawFastHLine(0, 28, 320, ILI9341_CYAN);
+    tft.drawFastHLine(0, 27, 320, ILI9341_CYAN);
+    tft.drawFastHLine(0, 28, 320, 0x0210);
+
     tft.setTextColor(ILI9341_CYAN);
     tft.setTextSize(2);
     tft.setCursor(8, 6);
     tft.print(title);
 
+    // Mini Wi-Fi 6 Signal Meter (4 Bars)
+    tft.fillRect(296, 18, 2, 4, ILI9341_CYAN);
+    tft.fillRect(300, 15, 2, 7, ILI9341_CYAN);
+    tft.fillRect(304, 12, 2, 10, ILI9341_CYAN);
+    tft.fillRect(308, 9, 2, 13, ILI9341_CYAN);
+
+    // Sub-header Telemetry Strip
+    tft.fillRect(0, 29, 320, 11, 0x0110);
+    tft.drawFastHLine(0, 40, 320, 0x18C3);
+    tft.setTextColor(0x07E0); // Emerald Green
+    tft.setTextSize(1);
+    tft.setCursor(8, 31);
+    tft.print("OMNIMODEL 5.2 | SPEED ROUTER | 240MHz RISC-V");
+
+    // Cyber Corner HUD Reticles
+    tft.drawFastHLine(3, 44, 6, ILI9341_CYAN);
+    tft.drawFastVLine(3, 44, 6, ILI9341_CYAN);
+    tft.drawFastHLine(311, 44, 6, ILI9341_CYAN);
+    tft.drawFastVLine(316, 44, 6, ILI9341_CYAN);
+    tft.drawFastHLine(3, 218, 6, ILI9341_CYAN);
+    tft.drawFastVLine(3, 212, 6, ILI9341_CYAN);
+    tft.drawFastHLine(311, 218, 6, ILI9341_CYAN);
+    tft.drawFastVLine(316, 212, 6, ILI9341_CYAN);
+
     // Bottom Status Bar
-    tft.fillRect(0, 222, 320, 18, 0x10A2);
+    tft.fillRect(0, 222, 320, 18, 0x08A2);
     tft.drawFastHLine(0, 221, 320, 0x2124);
     tft.setTextColor(ILI9341_LIGHTGREY);
     tft.setTextSize(1);
     tft.setCursor(8, 227);
     if (WiFi.status() == WL_CONNECTED) {
-        tft.printf("WiFi: %s (%s) | GENESIS AI 5.0", WIFI_SSID, WiFi.localIP().toString().c_str());
+        tft.printf("WiFi: %s (%s) | RSSI: %d dBm", WIFI_SSID, WiFi.localIP().toString().c_str(), WiFi.RSSI());
     } else {
         tft.print("WiFi: Connecting to 'Lost Case '...");
     }
+}
 
-    tft.setCursor(8, 36);
-    tft.setTextColor(ILI9341_WHITE);
-    tft.setTextSize(1);
+void printWordWrapped(const String& text, int lineStartX = 8, int maxX = 312) {
+    if (!screenReady) return;
+    int curX = tft.getCursorX();
+    int curY = tft.getCursorY();
+    int charWidth = 6;   // font size 1 = 6px per char
+    int lineHeight = 11; // 11px vertical line height
+    
+    int len = text.length();
+    int i = 0;
+    
+    while (i < len) {
+        char c = text.charAt(i);
+        if (c == '\r') {
+            i++;
+            continue;
+        }
+        if (c == '\n') {
+            curY += lineHeight;
+            curX = lineStartX;
+            tft.setCursor(curX, curY);
+            i++;
+            continue;
+        }
+        
+        if (c == ' ') {
+            if (curX + charWidth <= maxX) {
+                tft.print(' ');
+                curX += charWidth;
+            } else {
+                curY += lineHeight;
+                curX = lineStartX;
+                tft.setCursor(curX, curY);
+            }
+            i++;
+            continue;
+        }
+        
+        // Extract entire token up to next whitespace
+        int wordEnd = i;
+        while (wordEnd < len && text.charAt(wordEnd) != ' ' && text.charAt(wordEnd) != '\n' && text.charAt(wordEnd) != '\r') {
+            wordEnd++;
+        }
+        
+        String word = text.substring(i, wordEnd);
+        int wordWidth = word.length() * charWidth;
+        
+        // Wrap word to next line if it exceeds screen margin
+        if (curX + wordWidth > maxX && curX > lineStartX) {
+            curY += lineHeight;
+            curX = lineStartX;
+            tft.setCursor(curX, curY);
+        }
+        
+        tft.print(word);
+        curX = tft.getCursorX();
+        i = wordEnd;
+    }
+}
+
+String urlEncode(const String& str) {
+    String encoded = "";
+    char hex[4];
+    for (size_t i = 0; i < str.length(); i++) {
+        char c = str.charAt(i);
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            encoded += c;
+        } else {
+            sprintf(hex, "%%%02X", (unsigned char)c);
+            encoded += hex;
+        }
+    }
+    return encoded;
 }
 
 // -----------------------------------------------------------------------------
@@ -90,14 +186,15 @@ void askGenesisAI(String prompt) {
     if (screenReady) {
         drawHeader("GENESIS AI 5.0");
         tft.setTextColor(ILI9341_GREEN);
-        tft.setTextSize(2);
-        tft.print("Q: ");
         tft.setTextSize(1);
-        tft.println(prompt);
+        tft.setCursor(10, 46);
+        tft.print("Q: ");
+        printWordWrapped(prompt, 26, 310);
 
+        tft.drawFastHLine(8, 72, 304, 0x18C3);
         tft.setTextColor(ILI9341_ORANGE);
-        tft.setCursor(8, 70);
-        tft.println("\nThinking... (Querying Gateway via Wi-Fi 6)");
+        tft.setCursor(10, 80);
+        tft.println("[ Querying Router via Wi-Fi 6... ]");
     }
 
     if (WiFi.status() != WL_CONNECTED) {
@@ -105,24 +202,51 @@ void askGenesisAI(String prompt) {
         return;
     }
 
-    String encodedPrompt = prompt;
-    encodedPrompt.replace(" ", "%20");
+    String encodedPrompt = urlEncode(prompt);
 
     bool success = false;
     String answer = "";
 
-    // 1. Try Cloud Gateway
+    // 1. Try Primary Local Gateway
     {
+        HTTPClient http;
+        String localEndpoint = String(PRIMARY_GATEWAY_URL) + "?format=text&q=" + encodedPrompt;
+        Serial.print("Connecting to Primary Gateway: ");
+        Serial.println(localEndpoint);
+
+        if (http.begin(localEndpoint)) {
+            http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+            http.setReuse(false);
+            http.setUserAgent("ESP32-C5-Hardware-Agent");
+            http.addHeader("Accept", "text/plain");
+            http.setTimeout(12000);
+
+            int httpCode = http.GET();
+            if (httpCode == 200) {
+                answer = http.getString();
+                success = true;
+                Serial.printf("[Gateway Success 200 OK]\n");
+            } else {
+                Serial.printf("[Gateway HTTP Error]: %d\n", httpCode);
+            }
+            http.end();
+        }
+    }
+
+    // 2. Fallback to Cloud Gateway if Local returned non-200
+    if (!success) {
         WiFiClientSecure secureClient;
-        secureClient.setInsecure(); // Skip certificate verification for embedded IoT client
+        secureClient.setInsecure();
         secureClient.setTimeout(15000);
 
         HTTPClient http;
-        String endpoint = String(CLOUD_GATEWAY_URL) + "?q=" + encodedPrompt;
-        Serial.print("Connecting to Cloud Gateway: ");
+        String endpoint = String(CLOUD_GATEWAY_URL) + "?format=text&q=" + encodedPrompt;
+        Serial.print("Trying Cloud Gateway Fallback: ");
         Serial.println(endpoint);
 
         if (http.begin(secureClient, endpoint)) {
+            http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+            http.setReuse(false);
             http.setUserAgent("ESP32-C5-Hardware-Agent");
             http.addHeader("Accept", "text/plain");
             http.setTimeout(15000);
@@ -131,33 +255,9 @@ void askGenesisAI(String prompt) {
             if (httpCode == 200) {
                 answer = http.getString();
                 success = true;
-                Serial.printf("[Cloud Success 200 OK]\n");
+                Serial.printf("[Cloud Gateway Success 200 OK]\n");
             } else {
-                Serial.printf("[Cloud HTTP Error]: %d\n", httpCode);
-            }
-            http.end();
-        }
-    }
-
-    // 2. Fallback to Local Subnet Gateway if Cloud returned non-200
-    if (!success) {
-        HTTPClient http;
-        String localEndpoint = String(LOCAL_GATEWAY_URL) + "?q=" + encodedPrompt;
-        Serial.print("Trying Local Subnet Fallback: ");
-        Serial.println(localEndpoint);
-
-        if (http.begin(localEndpoint)) {
-            http.setUserAgent("ESP32-C5-Hardware-Agent");
-            http.addHeader("Accept", "text/plain");
-            http.setTimeout(10000);
-
-            int httpCode = http.GET();
-            if (httpCode == 200) {
-                answer = http.getString();
-                success = true;
-                Serial.printf("[Local Gateway Success 200 OK]\n");
-            } else {
-                Serial.printf("[Local Gateway Error]: %d\n", httpCode);
+                Serial.printf("[Cloud Gateway Error]: %d\n", httpCode);
             }
             http.end();
         }
@@ -173,14 +273,20 @@ void askGenesisAI(String prompt) {
             drawHeader("GENESIS AI 5.0");
             tft.setTextColor(ILI9341_GREEN);
             tft.setTextSize(1);
-            tft.printf("Q: %s\n\n", prompt.c_str());
+            tft.setCursor(10, 46);
+            tft.print("Q: ");
+            printWordWrapped(prompt, 26, 310);
 
+            tft.drawFastHLine(8, 72, 304, 0x18C3);
+            tft.setCursor(10, 76);
             tft.setTextColor(ILI9341_YELLOW);
-            tft.setTextSize(2);
-            tft.println("Answer:");
             tft.setTextSize(1);
+            tft.println("GENESIS AI ANSWER:");
+            
             tft.setTextColor(ILI9341_WHITE);
-            tft.println(answer);
+            tft.setTextSize(1);
+            tft.setCursor(10, 89);
+            printWordWrapped(answer, 10, 310);
         }
     } else {
         Serial.println("[Error] Both Cloud and Local Gateway queries timed out or failed.");
