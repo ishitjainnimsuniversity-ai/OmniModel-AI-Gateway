@@ -18,7 +18,7 @@ else:
 
 class GatewayConfig:
     PORT: int = int(os.getenv("PORT", "8000"))
-    HOST: str = os.getenv("HOST", "127.0.0.1")
+    HOST: str = os.getenv("HOST", "0.0.0.0")
 
     @classmethod
     def reload_env(cls):

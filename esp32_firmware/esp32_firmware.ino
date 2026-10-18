@@ -6,6 +6,9 @@
  *   MCU: ESP32-C5 (Wi-Fi 6 Dual-Band RISC-V 240MHz)
  *   Display: MSP2402 / QD241801 2.4-inch ILI9341 SPI (240x320) + XPT2046 Touch
  * 
+ * Wi-Fi Network:
+ *   SSID: "Lost Case " (WPA3-Personal, 2.4GHz)
+ * 
  * Pinout Configuration for ESP32-C5:
  *   TFT_CS   -> GPIO 6
  *   TFT_DC   -> GPIO 7
@@ -20,21 +23,26 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
-#include <WiFiManager.h>
 
-// ESP32-C5 SPI Pins for MSP2402
+// Wi-Fi Credentials (exact SSID with verified trailing space)
+const char* WIFI_SSID     = "Lost Case ";
+const char* WIFI_PASSWORD = "453441C1";
+
+// ESP32-C5 SPI Pins for MSP2402 Display
 #define TFT_CS   6
 #define TFT_DC   7
 #define TFT_RST  2
 #define TFT_BL   27
 
-// Gateway API Endpoint
-const char* GATEWAY_IOT_URL = "https://OmniModel-AI-Gateway.vercel.app/api/iot/chat";
+// Gateway Endpoints (Cloud & Local PC Fallback)
+const char* CLOUD_GATEWAY_URL = "https://OmniModel-AI-Gateway.vercel.app/api/iot/chat";
+const char* LOCAL_GATEWAY_URL = "http://10.22.163.200:8000/api/iot/chat";
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 bool screenReady = false;
@@ -46,8 +54,8 @@ void drawHeader(const char* title) {
     if (!screenReady) return;
     tft.fillScreen(ILI9341_BLACK);
     
-    // Top HUD Bar
-    tft.fillRect(0, 0, 320, 28, 0x0113); // Deep cyber blue
+    // Top Cyber HUD Bar
+    tft.fillRect(0, 0, 320, 28, 0x0113);
     tft.drawFastHLine(0, 28, 320, ILI9341_CYAN);
     tft.setTextColor(ILI9341_CYAN);
     tft.setTextSize(2);
@@ -61,9 +69,9 @@ void drawHeader(const char* title) {
     tft.setTextSize(1);
     tft.setCursor(8, 227);
     if (WiFi.status() == WL_CONNECTED) {
-        tft.printf("WiFi: %s | GENESIS AI 5.0", WiFi.localIP().toString().c_str());
+        tft.printf("WiFi: %s (%s) | GENESIS AI 5.0", WIFI_SSID, WiFi.localIP().toString().c_str());
     } else {
-        tft.print("Hotspot: GENESIS-AI-HOTSPOT (192.168.4.1)");
+        tft.print("WiFi: Connecting to 'Lost Case '...");
     }
 
     tft.setCursor(8, 36);
@@ -76,7 +84,7 @@ void drawHeader(const char* title) {
 // -----------------------------------------------------------------------------
 void askGenesisAI(String prompt) {
     Serial.println("\n==================================================");
-    Serial.print("🤖 [Question]: ");
+    Serial.print("[Question]: ");
     Serial.println(prompt);
 
     if (screenReady) {
@@ -93,27 +101,71 @@ void askGenesisAI(String prompt) {
     }
 
     if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("❌ WiFi not connected!");
+        Serial.println("[Error] Wi-Fi not connected!");
         return;
     }
 
-    HTTPClient http;
-    String endpoint = String(GATEWAY_IOT_URL) + "?q=" + prompt;
-    endpoint.replace(" ", "+");
+    String encodedPrompt = prompt;
+    encodedPrompt.replace(" ", "%20");
 
-    Serial.print("📡 Contacting Gateway: ");
-    Serial.println(endpoint);
+    bool success = false;
+    String answer = "";
 
-    http.begin(endpoint);
-    http.setUserAgent("ESP32-C5-Hardware-Agent");
-    http.addHeader("Accept", "text/plain");
-    http.setTimeout(15000);
+    // 1. Try Cloud Gateway
+    {
+        WiFiClientSecure secureClient;
+        secureClient.setInsecure(); // Skip certificate verification for embedded IoT client
+        secureClient.setTimeout(15000);
 
-    int httpCode = http.GET();
+        HTTPClient http;
+        String endpoint = String(CLOUD_GATEWAY_URL) + "?q=" + encodedPrompt;
+        Serial.print("Connecting to Cloud Gateway: ");
+        Serial.println(endpoint);
 
-    if (httpCode == 200) {
-        String answer = http.getString();
-        Serial.println("\n✨ [GENESIS AI Answer]:");
+        if (http.begin(secureClient, endpoint)) {
+            http.setUserAgent("ESP32-C5-Hardware-Agent");
+            http.addHeader("Accept", "text/plain");
+            http.setTimeout(15000);
+
+            int httpCode = http.GET();
+            if (httpCode == 200) {
+                answer = http.getString();
+                success = true;
+                Serial.printf("[Cloud Success 200 OK]\n");
+            } else {
+                Serial.printf("[Cloud HTTP Error]: %d\n", httpCode);
+            }
+            http.end();
+        }
+    }
+
+    // 2. Fallback to Local Subnet Gateway if Cloud returned non-200
+    if (!success) {
+        HTTPClient http;
+        String localEndpoint = String(LOCAL_GATEWAY_URL) + "?q=" + encodedPrompt;
+        Serial.print("Trying Local Subnet Fallback: ");
+        Serial.println(localEndpoint);
+
+        if (http.begin(localEndpoint)) {
+            http.setUserAgent("ESP32-C5-Hardware-Agent");
+            http.addHeader("Accept", "text/plain");
+            http.setTimeout(10000);
+
+            int httpCode = http.GET();
+            if (httpCode == 200) {
+                answer = http.getString();
+                success = true;
+                Serial.printf("[Local Gateway Success 200 OK]\n");
+            } else {
+                Serial.printf("[Local Gateway Error]: %d\n", httpCode);
+            }
+            http.end();
+        }
+    }
+
+    // Display Output
+    if (success) {
+        Serial.println("\n[GENESIS AI Answer]:");
         Serial.println(answer);
         Serial.println("==================================================");
 
@@ -131,13 +183,12 @@ void askGenesisAI(String prompt) {
             tft.println(answer);
         }
     } else {
-        Serial.printf("❌ [HTTP Error]: %d\n", httpCode);
+        Serial.println("[Error] Both Cloud and Local Gateway queries timed out or failed.");
         if (screenReady) {
             tft.setTextColor(ILI9341_RED);
-            tft.printf("\nHTTP Error: %d\nCheck internet or API key.", httpCode);
+            tft.println("\nQuery Failed. Check Internet connection.");
         }
     }
-    http.end();
 }
 
 // -----------------------------------------------------------------------------
@@ -147,67 +198,74 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    Serial.println("\n==================================================");
-    Serial.println("🚀 GENESIS AI 5.0 - ESP32-C5 Hardware Client");
-    Serial.println("Target: MSP2402 2.4\" ILI9341 SPI (240x320)");
-    Serial.println("Wi-Fi 6 Dual-Band + RISC-V 240MHz");
+    Serial.println("\n\n==================================================");
+    Serial.println("  GENESIS AI 5.0 - ESP32-C5 Hardware Client");
+    Serial.println("  Target Display: MSP2402 2.4\" ILI9341 SPI (240x320)");
+    Serial.println("  Wi-Fi 6 Dual-Band + RISC-V 240MHz");
     Serial.println("==================================================");
 
-    // Initialize LCD
+    // Initialize LCD (Safe to run even before screen is physically attached)
     tft.begin();
-    tft.setRotation(1); // Landscape 320x240
+    tft.setRotation(1); // Landscape mode 320x240
     screenReady = true;
 
     drawHeader("SYSTEM BOOT");
-    tft.setCursor(8, 45);
-    tft.println("Initializing Wi-Fi 6 Stack...");
-
-    // Wi-Fi Configuration Portal
-    WiFiManager wm;
-    wm.setConfigPortalTimeout(180); // 3 minutes timeout
-
-    Serial.println("📡 Connecting to saved Wi-Fi...");
-    tft.println("Starting Wi-Fi / Auto-Portal...");
-
-    bool res = wm.autoConnect("GENESIS-AI-HOTSPOT");
-
-    if (!res) {
-        Serial.println("❌ Failed to connect or portal timed out.");
-        drawHeader("WI-FI SETUP NEEDED");
-        tft.setTextColor(ILI9341_ORANGE);
+    if (screenReady) {
         tft.setCursor(8, 45);
-        tft.println("Wi-Fi Setup Hotspot Active:");
-        tft.setTextColor(ILI9341_CYAN);
-        tft.setTextSize(2);
-        tft.println("SSID: GENESIS-AI-HOTSPOT");
-        tft.setTextSize(1);
-        tft.setTextColor(ILI9341_WHITE);
-        tft.println("\nConnect your phone to 'GENESIS-AI-HOTSPOT'");
-        tft.println("Open browser to: http://192.168.4.1");
-    } else {
-        Serial.println("✅ Wi-Fi Connected Successfully!");
-        Serial.print("📍 IP: ");
-        Serial.println(WiFi.localIP());
-
-        drawHeader("GENESIS AI READY");
-        tft.setTextColor(ILI9341_GREEN);
-        tft.setCursor(8, 45);
-        tft.println("Wi-Fi Status: Connected!");
-        tft.setTextColor(ILI9341_WHITE);
-        tft.printf("IP: %s\n\n", WiFi.localIP().toString().c_str());
-        tft.println("Type your question in Arduino Serial Monitor!");
-
-        // Boot test query
-        askGenesisAI("What is the core principle of quantum physics in 20 words");
+        tft.println("Connecting to Lost Case Wi-Fi...");
     }
 
-    Serial.println("\n💬 Enter any question in the Serial Monitor and press Enter:");
+    // Wi-Fi 6 / WPA3 Configuration for ESP32-C5
+    WiFi.mode(WIFI_STA);
+    WiFi.setBandMode(WIFI_BAND_MODE_2G_ONLY);
+    WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+    WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
+
+    Serial.printf("Connecting to Wi-Fi: '%s'...\n", WIFI_SSID);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+        delay(500);
+        Serial.print(".");
+        if (screenReady) tft.print(".");
+        attempts++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\n\n>>> Wi-Fi Connected Successfully! <<<");
+        Serial.print(">>> IP Address: ");
+        Serial.println(WiFi.localIP());
+        Serial.printf(">>> Signal (RSSI): %d dBm\n", WiFi.RSSI());
+
+        drawHeader("GENESIS AI ONLINE");
+        if (screenReady) {
+            tft.setTextColor(ILI9341_GREEN);
+            tft.setCursor(8, 45);
+            tft.println("Status: Connected to Lost Case!");
+            tft.setTextColor(ILI9341_WHITE);
+            tft.printf("IP: %s\n\n", WiFi.localIP().toString().c_str());
+            tft.println("Type your question into Serial Monitor!");
+        }
+
+        // Test boot query
+        askGenesisAI("What is quantum computing in 20 words");
+    } else {
+        Serial.println("\nWi-Fi connection timed out!");
+        if (screenReady) {
+            tft.setTextColor(ILI9341_RED);
+            tft.println("\nWi-Fi Connection Failed.");
+        }
+    }
+
+    Serial.println("\nReady! Enter any question in Serial Monitor and press Enter:");
 }
 
 // -----------------------------------------------------------------------------
-// Loop
+// Main Loop
 // -----------------------------------------------------------------------------
 void loop() {
+    // Read question from Serial Monitor
     if (Serial.available()) {
         String input = Serial.readStringUntil('\n');
         input.trim();
