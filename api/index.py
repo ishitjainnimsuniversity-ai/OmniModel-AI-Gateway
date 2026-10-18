@@ -108,37 +108,29 @@ async def get_ai_wheel_png():
         return FileResponse(str(wheel_path), media_type="image/png")
     return JSONResponse(status_code=404, content={"error": "wheel not found"})
 
-@app.get("/tech_circuit_animated.gif")
-async def get_tech_circuit_animated_gif():
+@app.get("/quantum_core.png")
+async def get_quantum_core_png():
     from fastapi.responses import FileResponse
-    gif_path = PUBLIC_DIR / "tech_circuit_animated.gif"
-    if gif_path.exists():
-        return FileResponse(str(gif_path), media_type="image/gif")
-    return JSONResponse(status_code=404, content={"error": "gif not found"})
-
-@app.get("/technology-8280864_1280.jpg")
-async def get_tech_jpg():
-    from fastapi.responses import FileResponse
-    p = PUBLIC_DIR / "technology-8280864_1280.jpg"
+    p = PUBLIC_DIR / "quantum_core.png"
     if p.exists():
-        return FileResponse(str(p), media_type="image/jpeg")
-    return JSONResponse(status_code=404, content={"error": "image not found"})
-
-@app.get("/tech_bg.jpg")
-async def get_tech_bg_jpg():
-    from fastapi.responses import FileResponse
-    bg_path = PUBLIC_DIR / "tech_bg.jpg"
-    if bg_path.exists():
-        return FileResponse(str(bg_path), media_type="image/jpeg")
-    return JSONResponse(status_code=404, content={"error": "tech_bg not found"})
-
-@app.get("/quantum_core.jpg")
-async def get_quantum_core_jpg():
-    from fastapi.responses import FileResponse
-    core_path = PUBLIC_DIR / "quantum_core.jpg"
-    if core_path.exists():
-        return FileResponse(str(core_path), media_type="image/jpeg")
+        return FileResponse(str(p), media_type="image/png")
     return JSONResponse(status_code=404, content={"error": "quantum_core not found"})
+
+@app.get("/quantum_fusion_core.png")
+async def get_quantum_fusion_core_png():
+    from fastapi.responses import FileResponse
+    p = PUBLIC_DIR / "quantum_fusion_core.png"
+    if p.exists():
+        return FileResponse(str(p), media_type="image/png")
+    return JSONResponse(status_code=404, content={"error": "fusion core not found"})
+
+@app.get("/Quantum Core in a Neon Lab.png")
+async def get_quantum_core_orig_png():
+    from fastapi.responses import FileResponse
+    p = PUBLIC_DIR / "quantum_core.png"
+    if p.exists():
+        return FileResponse(str(p), media_type="image/png")
+    return JSONResponse(status_code=404, content={"error": "image not found"})
 
 # Request Models
 class ChatMessage(BaseModel):

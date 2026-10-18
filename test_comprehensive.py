@@ -69,6 +69,9 @@ def test_all_http_routes():
         ("/ip", "application/json"),
         ("/style.css", "text/css"),
         ("/app.js", "application/javascript"),
+        ("/ai_wheel.png", "image/png"),
+        ("/quantum_core.png", "image/png"),
+        ("/quantum_fusion_core.png", "image/png"),
         ("/v1/models", "application/json")
     ]
     
@@ -169,8 +172,10 @@ def test_screen_preview_html_markup():
     assert html_path.exists(), "public/screen_preview.html missing!"
     content = html_path.read_text(encoding="utf-8")
     
-    # Check key elements (Zero image dependencies, pure OLED)
-    assert "background-image: none !important" in content, "Expected pure image-free background!"
+    # Check key elements (Quantum Fusion + OLED toggle)
+    assert "id=\"lcd-fusion-layer\"" in content, "Missing lcd-fusion-layer element!"
+    assert "lcd-core-layer" in content, "Missing lcd-core-layer element!"
+    assert "lcd-wheel-layer" in content, "Missing lcd-wheel-layer element!"
     assert "id=\"lcd-display\"" in content, "Missing lcd-display element!"
     assert "id=\"lcd-answer\"" in content, "Missing lcd-answer element!"
     assert "id=\"custom-input\"" in content, "Missing custom-input element!"
@@ -179,7 +184,7 @@ def test_screen_preview_html_markup():
     assert "playTerminalClick" in content, "Missing SFX synthesizer!"
     assert "white-space: pre-wrap" in content, "Missing pre-wrap styling for word-spacing!"
     assert "word-break: break-word" in content, "Missing word-break styling!"
-    log("screen_preview.html markup (100% image-free OLED) verified!", "PASS")
+    log("screen_preview.html markup (Quantum Fusion Core & OLED) verified!", "PASS")
 
 def main():
     print("=" * 60)

@@ -23,11 +23,58 @@
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
-    /* Ultra-Clean Deep OLED Cyber Canvas (Zero Image Dependencies) */
+    /* Ultra-Clean Deep OLED Cyber Canvas */
     .tech-lcd-bg {
       background-color: #000000;
-      background-image: none !important;
       position: relative;
+    }
+    .lcd-core-layer {
+      position: absolute;
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      background-image: url('quantum_core.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0.72;
+      filter: saturate(1.4) contrast(1.2) brightness(1.1);
+      mask-image: radial-gradient(circle, rgba(0,0,0,1) 48%, transparent 72%);
+      -webkit-mask-image: radial-gradient(circle, rgba(0,0,0,1) 48%, transparent 72%);
+      animation: rotateCinematicCore 60s infinite linear;
+    }
+    .lcd-wheel-layer {
+      position: absolute;
+      width: 235px;
+      height: 235px;
+      background-image: url('ai_wheel.png');
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+      opacity: 0.88;
+      filter: saturate(1.5) drop-shadow(0 0 16px rgba(0, 240, 255, 0.7));
+      animation: rotateCinematicWheel 40s infinite linear;
+    }
+    .lcd-halo-layer {
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.25) 0%, rgba(0, 240, 255, 0.2) 50%, transparent 75%);
+      animation: pulseHalo 6s infinite ease-in-out alternate;
+    }
+    @keyframes rotateCinematicWheel {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes rotateCinematicCore {
+      from { transform: rotate(0deg) scale(1.0); }
+      50% { transform: rotate(180deg) scale(1.06); }
+      to { transform: rotate(360deg) scale(1.0); }
+    }
+    @keyframes pulseHalo {
+      0% { transform: scale(0.9); opacity: 0.5; }
+      100% { transform: scale(1.15); opacity: 0.9; }
     }
     .crt-scanlines {
       background: linear-gradient(
@@ -100,6 +147,13 @@
 
       <!-- THE 320x240 LCD DISPLAY -->
       <div id="lcd-display" class="relative w-[320px] h-[240px] md:w-[480px] md:h-[360px] rounded border-4 border-neutral-900 shadow-[inset_0_0_25px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col justify-between tech-lcd-bg crt-scanlines lcd-screen select-none">
+        
+        <!-- Cinematic Rotating Quantum Fusion Core Background Layer -->
+        <div id="lcd-fusion-layer" class="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
+          <div class="lcd-halo-layer"></div>
+          <div class="lcd-core-layer"></div>
+          <div class="lcd-wheel-layer"></div>
+        </div>
         
         <!-- Cyber Corner HUD Reticles -->
         <div class="absolute top-8 left-2 w-2.5 h-2.5 border-t border-l border-cyan-400/70 pointer-events-none"></div>
@@ -184,7 +238,7 @@
             <span>📊</span> <span>TELEMETRY</span>
           </button>
           <button id="theme-toggle" onclick="toggleOledMode()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-cyan-400 font-semibold flex items-center gap-1">
-            <span>🌌</span> <span id="theme-label">OLED BLACK</span>
+            <span>⚛️</span> <span id="theme-label">FUSION CORE</span>
           </button>
         </div>
         <button id="sfx-toggle" onclick="toggleAudio()" class="tactile-btn px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-[10px] font-mono text-emerald-400 font-semibold flex items-center gap-1">
@@ -307,18 +361,17 @@
       document.getElementById('sfx-label').textContent = sfxEnabled ? 'SFX ON' : 'SFX OFF';
     }
 
-    let oledPure = true;
+    let fusionActive = true;
     function toggleOledMode() {
-      oledPure = !oledPure;
-      const lcd = document.getElementById('lcd-display');
-      if (oledPure) {
-        lcd.style.backgroundColor = '#000000';
-        lcd.style.backgroundImage = 'none';
-        document.getElementById('theme-label').textContent = 'OLED BLACK';
+      fusionActive = !fusionActive;
+      const fusionLayer = document.getElementById('lcd-fusion-layer');
+      const label = document.getElementById('theme-label');
+      if (fusionActive) {
+        if (fusionLayer) fusionLayer.style.display = 'flex';
+        label.textContent = 'FUSION CORE';
       } else {
-        lcd.style.backgroundColor = '#030712';
-        lcd.style.backgroundImage = 'radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.08) 0%, rgba(0, 0, 0, 0.95) 100%)';
-        document.getElementById('theme-label').textContent = 'CYBER GLOW';
+        if (fusionLayer) fusionLayer.style.display = 'none';
+        label.textContent = 'OLED BLACK';
       }
     }
 
