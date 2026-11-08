@@ -1,0 +1,72 @@
+[
+  {
+    "test_num": 1,
+    "name": "Local question answering (internet ON)",
+    "passed": true,
+    "detail": "Brain: LOCAL, Model: llama3.2:1b, Ans: 'The boiling point of water at sea level in Celsius is 100 de'",
+    "seconds": 4.17
+  },
+  {
+    "test_num": 2,
+    "name": "Local question answering (offline mode)",
+    "passed": true,
+    "detail": "Mode: OFFLINE, Brain: LOCAL, Ans: 'The speed of light in a vacuum is approximately 299,792,458 meters per'",
+    "seconds": 3.14
+  },
+  {
+    "test_num": 3,
+    "name": "Follow-up questions while offline",
+    "passed": true,
+    "detail": "Conv ID: a9829d2eaaa4, Turn 2 Ans: '1915'",
+    "seconds": 2.39
+  },
+  {
+    "test_num": 4,
+    "name": "Writing text while offline",
+    "passed": true,
+    "detail": "Chars: 512, Content: 'Here is a 3-sentence polite email requesting leave on Friday:  Subject'",
+    "seconds": 10.95
+  },
+  {
+    "test_num": 5,
+    "name": "Code generation while offline",
+    "passed": true,
+    "detail": "Provider: ollama, Code: '```python def is_prime(n):     if n <= 1:         return False     if '",
+    "seconds": 9.28
+  },
+  {
+    "test_num": 6,
+    "name": "Ollama service stopped handling",
+    "passed": true,
+    "detail": "Accurate error reported: all_providers_failed -> Ollama is not reachable locally on Windows. Start Ollama at http://127.0.0.1:11434.",
+    "seconds": 0.8
+  },
+  {
+    "test_num": 7,
+    "name": "Windows backend stopped handling",
+    "passed": true,
+    "detail": "Client detects backend down: ConnectTimeout (triggers reconnect loop on ESP32)",
+    "seconds": 1.5
+  },
+  {
+    "test_num": 8,
+    "name": "ESP32 disconnect detection / zero-load feed",
+    "passed": true,
+    "detail": "Feed seq: 13, Changed: False, Age: 2s",
+    "seconds": 0.0
+  },
+  {
+    "test_num": 9,
+    "name": "Cloud unavailable -> Auto failover to local",
+    "passed": true,
+    "detail": "Fallback: True, Brain: LOCAL, Ans: '25'",
+    "seconds": 3.17
+  },
+  {
+    "test_num": 10,
+    "name": "Automatic recovery after reconnection",
+    "passed": true,
+    "detail": "Brain: CLOUD, Provider: gemini, Ans: '15'",
+    "seconds": 2.8
+  }
+]

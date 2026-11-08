@@ -441,6 +441,15 @@ async def clear_user_analytics():
     AnalyticsTracker.clear_records()
     return {"success": True, "message": "Analytics history cleared"}
 
+@app.get("/api/keys")
+@app.get("/keys")
+async def get_api_keys():
+    return {
+        "GEMINI_API_KEY": GatewayConfig.get_key("GEMINI_API_KEY") or "",
+        "OPENROUTER_API_KEY": GatewayConfig.get_key("OPENROUTER_API_KEY") or "",
+        "GROQ_API_KEY": GatewayConfig.get_key("GROQ_API_KEY") or "",
+    }
+
 @app.post("/api/keys")
 @app.post("/keys")
 async def update_api_key(req: KeyUpdateRequest):

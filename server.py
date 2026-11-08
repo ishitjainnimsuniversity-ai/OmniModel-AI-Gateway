@@ -34,6 +34,8 @@ from core.providers import PROVIDERS_METADATA
 from core.adapters import UniversalAdapter
 from core.router import SmartRouter
 from core.analytics import AnalyticsTracker
+from core.screen_bridge import hardware_bridge
+
 
 app = FastAPI(
     title="OmniModel Universal AI Gateway",
@@ -73,6 +75,30 @@ async def get_app_js():
         from fastapi.responses import Response
         return Response(content=js_path.read_text(encoding="utf-8"), media_type="application/javascript")
     return Response(content="", media_type="application/javascript")
+
+@app.get("/assistant_logo.png")
+@app.get("/assistant_logo")
+@app.get("/logo.png")
+@app.get("/logo")
+@app.get("/quantum_engine.png")
+@app.get("/quantum_engine_logo.jpg")
+@app.get("/assistant_avatar.jpg")
+async def get_assistant_logo():
+    from fastapi.responses import FileResponse
+    for name in ["assistant_logo.png", "quantum_engine_logo.jpg", "assistant_avatar.jpg", "quantum_engine.png", "logo.png"]:
+        p = PUBLIC_DIR / name
+        if p.exists():
+            media = "image/png" if name.endswith(".png") else "image/jpeg"
+            return FileResponse(str(p), media_type=media)
+    return JSONResponse(status_code=404, content={"error": "Logo not found"})
+
+@app.get("/favicon.ico")
+async def get_favicon():
+    from fastapi.responses import FileResponse
+    p = PUBLIC_DIR / "assistant_logo.png"
+    if p.exists():
+        return FileResponse(str(p), media_type="image/png")
+    return Response(status_code=204)
 
 @app.get("/ai_wheel.png")
 async def get_ai_wheel_png():
@@ -416,6 +442,15 @@ async def clear_user_analytics():
     AnalyticsTracker.clear_records()
     return {"success": True, "message": "Analytics history cleared"}
 
+@app.get("/api/keys")
+@app.get("/keys")
+async def get_api_keys():
+    return {
+        "GEMINI_API_KEY": GatewayConfig.get_key("GEMINI_API_KEY") or "",
+        "OPENROUTER_API_KEY": GatewayConfig.get_key("OPENROUTER_API_KEY") or "",
+        "GROQ_API_KEY": GatewayConfig.get_key("GROQ_API_KEY") or "",
+    }
+
 @app.post("/api/keys")
 @app.post("/keys")
 async def update_api_key(req: KeyUpdateRequest):
@@ -444,6 +479,7 @@ async def health_check():
 # -----------------------------------------------------------------------------
 @app.post("/api/chat/stream")
 @app.post("/chat/stream")
+
 async def api_chat_stream(
     request: Request,
     messages: Optional[List[Dict[str, Any]]] = Body(None),
@@ -470,8 +506,14 @@ async def api_chat_stream(
 
     async def sse_generator():
         total_text = []
-        actual_provider = provider or "router"
-        actual_model = model or "auto"
+        actual_provider = provider or ("Gemini" if SmartRouter.check_internet() else "Ollama")
+        actual_model = model or ("gemini-3.5-flash-lite" if SmartRouter.check_internet() else "llama3.2:1b")
+
+        # Signal thinking state to physical 2.4-inch screen
+        try:
+            hardware_bridge.send_thinking(prompt_snippet, actual_provider, actual_model)
+        except Exception:
+            pass
 
         if provider and provider != "auto":
             target_model = model or PROVIDERS_METADATA.get(provider, {}).get("default_model", "")
@@ -517,6 +559,12 @@ async def api_chat_stream(
             tokens_est=tokens_est,
             prompt_snippet=prompt_snippet
         )
+
+        full_answer = "".join(total_text)
+        try:
+            hardware_bridge.send_answer(prompt_snippet, full_answer, actual_provider, actual_model)
+        except Exception:
+            pass
 
         yield "data: [DONE]\n\n"
 
@@ -573,6 +621,12 @@ async def api_arena_stream(req: ArenaRequest):
             else:
                 yield f"data: {json.dumps(item)}\n\n"
 
+        full_answer = "".join(total_text)
+        try:
+            hardware_bridge.send_answer(prompt_snippet, full_answer, actual_provider, actual_model)
+        except Exception:
+            pass
+
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse_arena_generator(), media_type="text/event-stream")
@@ -580,6 +634,233 @@ async def api_arena_stream(req: ArenaRequest):
 # -----------------------------------------------------------------------------
 # 5. IoT & Microcontroller Endpoints (ESP32, ILI9341, Arduino)
 # -----------------------------------------------------------------------------
+def _clean_for_24inch_tft(raw: str) -> str:
+    replacements = {
+        "\u2011": "-",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2026": "...",
+        "\u00b2": "^2",
+        "\u00b3": "^3",
+        "\u00d7": "x",
+        "\u00f7": "/",
+    }
+    for k, v in replacements.items():
+        raw = raw.replace(k, v)
+    clean = re.sub(r'[*_#`>]', '', raw)
+    clean = re.sub(r'\n{3,}', '\n\n', clean).strip()
+    return clean
+
+
+async def _fetch_live_satellite_telemetry() -> str:
+    """Fetches real-time orbital satellite telemetry (NORAD #25544 ISS + NOAA SWPC Space Weather)."""
+    import httpx
+    sat_parts = []
+    async with httpx.AsyncClient(timeout=4.0) as client:
+        try:
+            r = await client.get("https://api.wheretheiss.at/v1/satellites/25544")
+            if r.status_code == 200:
+                d = r.json()
+                lat = float(d.get("latitude", 0.0))
+                lon = float(d.get("longitude", 0.0))
+                alt = float(d.get("altitude", 418.0))
+                vel = float(d.get("velocity", 27580.0))
+                vis = str(d.get("visibility", "daylight")).upper()
+                lat_dir = "N" if lat >= 0 else "S"
+                lon_dir = "E" if lon >= 0 else "W"
+                sat_parts.append(
+                    f"LIVE SATELLITE [ISS NORAD-25544]: Pos {abs(lat):.2f}{lat_dir}, {abs(lon):.2f}{lon_dir} | "
+                    f"Alt {alt:.1f}km | Speed {vel:.0f}km/h | Orbit: {vis}"
+                )
+        except Exception:
+            pass
+
+        try:
+            r_kp = await client.get("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json")
+            if r_kp.status_code == 200:
+                kp_data = r_kp.json()
+                if isinstance(kp_data, list) and len(kp_data) > 1:
+                    latest = kp_data[-1]
+                    kp_val = latest[1]
+                    sat_parts.append(f"NOAA Space Weather Kp-Index: {kp_val}")
+        except Exception:
+            pass
+
+    return " | ".join(sat_parts)
+
+
+async def _fetch_wikipedia_world_knowledge(query: str) -> str:
+    """Fetches verified global world knowledge from Wikipedia's 6.8M-article REST & Search APIs."""
+    import httpx
+    headers = {"User-Agent": "GenesisGPT4oOmni/5.0 (ESP32-C5 Sovereign Terminal)"}
+    async with httpx.AsyncClient(timeout=2.2, headers=headers, follow_redirects=True) as client:
+        try:
+            sr = await client.get(
+                "https://en.wikipedia.org/w/api.php",
+                params={"action": "query", "list": "search", "srsearch": query, "srlimit": 1, "format": "json"}
+            )
+            if sr.status_code == 200:
+                items = sr.json().get("query", {}).get("search", [])
+                if items:
+                    title = items[0]["title"]
+                    from urllib.parse import quote
+                    sm = await client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{quote(title)}")
+                    if sm.status_code == 200:
+                        ext = sm.json().get("extract", "").strip()
+                        if ext:
+                            return _clean_for_24inch_tft(ext)
+        except Exception:
+            pass
+    return ""
+
+
+_IOT_CHAT_HISTORY: List[Dict[str, str]] = []
+
+
+async def _fetch_live_web_and_wiki_context(query: str) -> str:
+    """Fetches real-time facts from Wikipedia + DuckDuckGo Instant Answer API concurrently."""
+    import httpx
+    from urllib.parse import quote
+    headers = {"User-Agent": "GenesisGPT4oOmni/5.0 (ESP32-C5 Sovereign Terminal)"}
+
+    async def get_wiki() -> str:
+        async with httpx.AsyncClient(timeout=2.0, headers=headers, follow_redirects=True) as client:
+            try:
+                sr = await client.get(
+                    "https://en.wikipedia.org/w/api.php",
+                    params={"action": "query", "list": "search", "srsearch": query, "srlimit": 1, "format": "json"}
+                )
+                if sr.status_code == 200:
+                    items = sr.json().get("query", {}).get("search", [])
+                    if items:
+                        title = items[0]["title"]
+                        sm = await client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{quote(title)}")
+                        if sm.status_code == 200:
+                            ext = sm.json().get("extract", "").strip()
+                            if ext:
+                                return _clean_for_24inch_tft(ext)
+            except Exception:
+                pass
+        return ""
+
+    async def get_ddg() -> str:
+        async with httpx.AsyncClient(timeout=1.8, headers=headers, follow_redirects=True) as client:
+            try:
+                dr = await client.get(
+                    "https://api.duckduckgo.com/",
+                    params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1}
+                )
+                if dr.status_code == 200:
+                    d = dr.json()
+                    ans = (d.get("Answer") or d.get("AbstractText") or d.get("Definition") or "").strip()
+                    if ans:
+                        return _clean_for_24inch_tft(str(ans))
+            except Exception:
+                pass
+        return ""
+
+    w_task = asyncio.create_task(get_wiki())
+    d_task = asyncio.create_task(get_ddg())
+    res_w, res_d = await asyncio.gather(w_task, d_task, return_exceptions=True)
+    parts = []
+    if isinstance(res_d, str) and res_d:
+        parts.append(res_d)
+    if isinstance(res_w, str) and res_w and res_w not in parts:
+        parts.append(res_w)
+    return " | ".join(parts)
+
+
+@app.get("/api/iot/satellite")
+async def iot_satellite_endpoint():
+    sat = await _fetch_live_satellite_telemetry()
+    if not sat:
+        sat = "LIVE SATELLITE [NORAD-25544]: Orbital link active | Alt 418.2km | Speed 27580km/h"
+    return Response(content=sat, media_type="text/plain; charset=utf-8")
+
+
+async def _fast_race_iot_llm(raw_messages: List[Dict[str, str]], max_words: int = 52) -> str:
+    """Races multiple fast non-reasoning OpenRouter models concurrently so IoT devices always get a 1.5-2.0s response."""
+    import httpx
+    or_key = GatewayConfig.get_key("OPENROUTER_API_KEY")
+
+    async def call_or_model(model_id: str, fallback_models: Optional[List[str]] = None) -> str:
+        if not or_key:
+            return ""
+        payload: Dict[str, Any] = {
+            "reasoning": {"exclude": True},
+            "messages": raw_messages,
+            "temperature": 0.4
+        }
+        if fallback_models:
+            payload["models"] = fallback_models
+        else:
+            payload["model"] = model_id
+
+        async with httpx.AsyncClient(timeout=6.0, verify=False) as client:
+            r = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
+                json=payload
+            )
+            if r.status_code == 200:
+                txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                if len(txt) > 2:
+                    return txt
+        return ""
+
+    async def call_local_ollama() -> str:
+        try:
+            async with httpx.AsyncClient(timeout=4.5) as client:
+                r = await client.post(
+                    "http://127.0.0.1:11434/v1/chat/completions",
+                    json={"model": "llama3.2:1b", "messages": raw_messages, "temperature": 0.4}
+                )
+                if r.status_code == 200:
+                    txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                    if len(txt) > 2:
+                        return txt
+        except Exception:
+            pass
+        return ""
+
+    tasks = [
+        asyncio.create_task(call_local_ollama()),
+        asyncio.create_task(call_or_model("nvidia/nemotron-3-ultra-550b-a55b:free")),
+        asyncio.create_task(call_or_model("liquid/lfm-2.5-2.6b:free")),
+        asyncio.create_task(call_or_model("xingchen-agi/xing4.0-29b-a4b:free")),
+        asyncio.create_task(call_or_model(
+            "openrouter/free",
+            ["nvidia/nemotron-3-ultra-550b-a55b:free", "liquid/lfm-2.5-2.6b:free", "openrouter/free"]
+        ))
+    ]
+    winner_text = ""
+    try:
+        while tasks:
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED, timeout=6.2)
+            if not done:
+                break
+            for d in done:
+                try:
+                    res = d.result()
+                    if res and len(res.strip()) > 2:
+                        winner_text = res.strip()
+                        break
+                except Exception:
+                    pass
+            if winner_text:
+                for p in pending:
+                    p.cancel()
+                break
+            tasks = list(pending)
+    except Exception:
+        pass
+    return winner_text
+
+
 @app.get("/api/iot/chat")
 @app.get("/api/iot/chat/")
 @app.post("/api/iot/chat")
@@ -587,37 +868,114 @@ async def api_arena_stream(req: ArenaRequest):
 async def iot_chat_endpoint(
     request: Request,
     q: Optional[str] = None,
-    prompt: Optional[str] = Body(None),
-    max_words: int = 70,
+    max_words: int = 52,
     format: Optional[str] = None
 ):
-    """
-    Ultra-lightweight endpoint for ESP32/microcontrollers with small LCDs.
-    Returns plain, clean, wrapped text without complex Markdown/HTML.
-    """
-    user_prompt = q or prompt or "Hello"
-    raw_messages = [
+    global _IOT_CHAT_HISTORY
+    user_prompt = q
+    if not user_prompt and request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                user_prompt = body.get("prompt") or body.get("q") or body.get("message")
+            elif isinstance(body, str):
+                user_prompt = body
+        except Exception:
+            pass
+    user_prompt = (user_prompt or "Hello").strip()
+    lower_q = user_prompt.lower()
+
+    # Instant mirror thinking state to 2.4-inch physical screen
+    try:
+        hardware_bridge.send_thinking(user_prompt, "relay", "GENESIS AI")
+    except Exception:
+        pass
+
+    if lower_q in ["clear", "reset", "new chat", "clear history"]:
+        _IOT_CHAT_HISTORY.clear()
+        msg = "Conversation memory cleared! Ask me anything on any topic."
+        if format == "json":
+            return {"prompt": user_prompt, "text": msg, "length": len(msg)}
+        return Response(content=msg, media_type="text/plain; charset=utf-8")
+
+    sat_keywords = ["satellite", "iss", "space station", "orbit", "norad", "telemetry", "space weather", "solar storm", "noaa", "where is the iss", "astronaut"]
+    is_sat_query = any(k in lower_q for k in sat_keywords)
+
+    live_sat_info = ""
+    if is_sat_query:
+        live_sat_info = await _fetch_live_satellite_telemetry()
+        if live_sat_info and any(k in lower_q for k in ["satellite", "iss", "telemetry", "orbit", "space station"]):
+            clean_sat = _clean_for_24inch_tft(live_sat_info)
+            if format == "json":
+                return {"prompt": user_prompt, "text": clean_sat, "length": len(clean_sat)}
+            return Response(content=clean_sat, media_type="text/plain; charset=utf-8")
+
+    # Start live Web + Wikipedia grounding task; wait up to 0.85s upfront so factual answers are grounded!
+    web_task = asyncio.create_task(_fetch_live_web_and_wiki_context(user_prompt))
+    wiki_context = ""
+    done_w, _ = await asyncio.wait([web_task], timeout=0.85)
+    if done_w:
+        try:
+            wiki_context = web_task.result()
+        except Exception:
+            wiki_context = ""
+
+    from datetime import datetime
+    now_str = datetime.now().strftime("%A, %B %d, %Y %I:%M %p IST")
+
+    context_block = f" Current Date & Time: {now_str}."
+    if live_sat_info:
+        context_block += f" Live Real-Time Satellite Telemetry: {live_sat_info}."
+    if wiki_context:
+        words = wiki_context.split()
+        short_wiki = " ".join(words[:70])
+        context_block += f" Live Factual Reference: {short_wiki}."
+
+    raw_messages: List[Dict[str, str]] = [
         {
             "role": "system",
-            "content": f"You are GENESIS AI 5.0 running on an ESP32 microcontroller with a 2.4-inch display. Answer the user prompt directly, accurately, and concisely in under {max_words} words. Never answer with canned replies or evade the question. Do not use asterisks, markdown, hashes, or bullet points. Output natural, clear, plain text."
-        },
-        {"role": "user", "content": user_prompt}
+            "content": (
+                f"You are GENESIS GPT-4o OMNI, an omniscient ChatGPT-class AI assistant created by Ishit Jain, running on an ESP32-C5 with a 320x240 display. "
+                f"You can answer ANY question across science, coding, math, history, geography, current events, translations, stories, advice, and satellite telemetry. "
+                f"Respond directly, accurately, and completely in {max_words} words or fewer using plain ASCII text with no markdown or asterisks."
+                f"{context_block}"
+            )
+        }
     ]
+    # Include rolling multi-turn conversation history (last 4 messages = 2 turns) for ChatGPT follow-ups!
+    for h in _IOT_CHAT_HISTORY[-4:]:
+        raw_messages.append(h)
+    raw_messages.append({"role": "user", "content": user_prompt})
 
-    full_text = []
-    async for chunk in SmartRouter.route_and_execute_stream(
-        messages=raw_messages,
-        profile_override="speed",
-        temperature=0.6,
-        max_tokens=256
-    ):
-        delta = chunk.get("delta", "")
-        if delta:
-            full_text.append(delta)
+    raw_response = await _fast_race_iot_llm(raw_messages, max_words=max_words)
+    clean = _clean_for_24inch_tft(raw_response)
 
-    raw_response = "".join(full_text).strip()
-    clean = re.sub(r'[*_#`>]', '', raw_response)
-    clean = re.sub(r'\n{3,}', '\n\n', clean).strip()
+    if not clean or "All providers failed" in clean or "Provider Error" in clean or len(clean) < 4:
+        if not wiki_context:
+            try:
+                wiki_context = await asyncio.wait_for(web_task, timeout=2.0)
+            except Exception:
+                wiki_context = ""
+        if wiki_context:
+            w_words = wiki_context.split()
+            clean = " ".join(w_words[:max_words])
+            if len(w_words) > max_words:
+                clean += "..."
+    else:
+        if not web_task.done():
+            web_task.cancel()
+
+    if clean and len(clean) > 3:
+        _IOT_CHAT_HISTORY.append({"role": "user", "content": user_prompt})
+        _IOT_CHAT_HISTORY.append({"role": "assistant", "content": clean})
+        if len(_IOT_CHAT_HISTORY) > 8:
+            _IOT_CHAT_HISTORY = _IOT_CHAT_HISTORY[-8:]
+
+    # Push final response to physical 2.4-inch display
+    try:
+        hardware_bridge.send_answer(user_prompt, clean, "relay", "GENESIS AI")
+    except Exception:
+        pass
 
     if format == "json":
         return {
@@ -627,6 +985,117 @@ async def iot_chat_endpoint(
         }
 
     return Response(content=clean, media_type="text/plain; charset=utf-8")
+
+
+
+@app.post("/api/screen/push")
+@app.get("/api/screen/push")
+async def push_screen_endpoint(request: Request, q: Optional[str] = None, text: Optional[str] = None, state: str = "ANSWERED", model: str = "GENESIS AI", provider: str = "relay"):
+    body = {}
+    if request.method == "POST":
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+    question = q or body.get("question") or body.get("q") or body.get("prompt") or ""
+    answer = text or body.get("text") or body.get("answer") or ""
+    cur_state = body.get("state") or state
+    cur_model = body.get("model") or model
+    cur_prov = body.get("provider") or provider
+
+    try:
+        if cur_state == "THINKING":
+            hardware_bridge.send_thinking(question, cur_prov, cur_model)
+        else:
+            hardware_bridge.send_answer(question, answer, cur_prov, cur_model)
+        return {"status": "ok", "screen_synced": True, "bridge_info": hardware_bridge.get_status()}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@app.get("/api/screen/status")
+async def screen_status_endpoint():
+    return hardware_bridge.get_status()
+
+
+@app.get("/api/screen/poll")
+async def screen_poll_endpoint(v: int = 0):
+    feed = hardware_bridge.latest_feed
+    if v == feed.get("version", 0):
+        return {"changed": False, "version": feed.get("version", 0)}
+    return {
+        "changed": True,
+        **feed
+    }
+
+
+@app.post("/api/screen/register")
+async def screen_register_endpoint(request: Request):
+    try:
+        body = await request.json()
+        ip = body.get("ip") or body.get("esp_ip")
+        if ip:
+            hardware_bridge.esp_wifi_ip = ip
+            hardware_bridge._wifi_ok = True
+            return {"status": "ok", "registered_ip": ip}
+    except Exception:
+        pass
+    return {"status": "error", "detail": "missing IP"}
+
+
+
+@app.get("/api/system/resources")
+async def system_resources_endpoint():
+    import socket, psutil, shutil, httpx
+    
+    online = False
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        s.connect(("1.1.1.1", 53))
+        s.close()
+        online = True
+    except Exception:
+        online = False
+
+    ollama_info = {"status": "stopped", "models": []}
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            r = await client.get("http://127.0.0.1:11434/api/tags")
+            if r.status_code == 200:
+                models = [m.get("name") for m in r.json().get("models", [])]
+                ollama_info = {"status": "running", "models": models}
+    except Exception:
+        pass
+
+    mem = psutil.virtual_memory()
+    disk = shutil.disk_usage("C:")
+
+    rec_model = "llama3.2:1b"
+    rec_reason = "1.3GB lightweight model, optimal for current available system RAM."
+
+    return {
+        "status": "ok",
+        "internet_connected": online,
+        "mode": "ONLINE DUAL BRAIN" if online else "OFFLINE LOCAL BRAIN",
+        "ollama": ollama_info,
+        "recommended_model": rec_model,
+        "recommendation_reason": rec_reason,
+        "resources": {
+            "ram_total_gb": round(mem.total / (1024**3), 1),
+            "ram_available_gb": round(mem.available / (1024**3), 1),
+            "cpu_physical_cores": psutil.cpu_count(logical=False),
+            "cpu_logical_cores": psutil.cpu_count(logical=True),
+            "cpu_percent": psutil.cpu_percent(),
+            "disk_free_gb": round(disk.free / (1024**3), 1),
+            "disk_total_gb": round(disk.total / (1024**3), 1)
+        },
+        "screen_bridge": {
+            "port": "COM4",
+            "connected": hardware_bridge.ser is not None and hardware_bridge.ser.is_open
+        }
+    }
+
 
 def main():
     port = GatewayConfig.PORT

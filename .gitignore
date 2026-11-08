@@ -48,3 +48,12 @@ desktop.ini
 # Logs & Database
 *.log
 data/analytics.json
+build_cdc/
+build/
+*.bin
+*.elf
+*.map
+backups/
+scratch/
+genesis_portable_firmware/build*/
+esp32_firmware/build*/

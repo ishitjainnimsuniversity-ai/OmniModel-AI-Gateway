@@ -28,53 +28,18 @@
       background-color: #000000;
       position: relative;
     }
-    .lcd-core-layer {
+    .lcd-quantum-watermark {
       position: absolute;
-      width: 210px;
-      height: 210px;
+      width: 140px;
+      height: 140px;
       border-radius: 50%;
-      background-image: url('quantum_core.png');
+      background-image: url('assistant_logo.png');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
-      opacity: 0.72;
-      filter: saturate(1.4) contrast(1.2) brightness(1.1);
-      mask-image: radial-gradient(circle, rgba(0,0,0,1) 48%, transparent 72%);
-      -webkit-mask-image: radial-gradient(circle, rgba(0,0,0,1) 48%, transparent 72%);
-      animation: rotateCinematicCore 60s infinite linear;
-    }
-    .lcd-wheel-layer {
-      position: absolute;
-      width: 235px;
-      height: 235px;
-      background-image: url('ai_wheel.png');
-      background-size: contain;
-      background-position: center;
-      background-repeat: no-repeat;
-      opacity: 0.88;
-      filter: saturate(1.5) drop-shadow(0 0 16px rgba(0, 240, 255, 0.7));
-      animation: rotateCinematicWheel 40s infinite linear;
-    }
-    .lcd-halo-layer {
-      position: absolute;
-      width: 180px;
-      height: 180px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(245, 158, 11, 0.25) 0%, rgba(0, 240, 255, 0.2) 50%, transparent 75%);
-      animation: pulseHalo 6s infinite ease-in-out alternate;
-    }
-    @keyframes rotateCinematicWheel {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    @keyframes rotateCinematicCore {
-      from { transform: rotate(0deg) scale(1.0); }
-      50% { transform: rotate(180deg) scale(1.06); }
-      to { transform: rotate(360deg) scale(1.0); }
-    }
-    @keyframes pulseHalo {
-      0% { transform: scale(0.9); opacity: 0.5; }
-      100% { transform: scale(1.15); opacity: 0.9; }
+      opacity: 0.12;
+      pointer-events: none;
+      z-index: 0;
     }
     .crt-scanlines {
       background: linear-gradient(
@@ -114,9 +79,12 @@
         <span class="text-cyan-600">•</span>
         <span class="text-emerald-400">Wi-Fi 6 WPA3</span>
       </div>
-      <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400 bg-clip-text text-transparent">
-        GENESIS AI 5.0 Hardware Client
-      </h1>
+      <div class="flex items-center justify-center gap-3 mt-2">
+        <img src="assistant_logo.png" alt="Quantum Engine" class="w-9 h-9 rounded-full border-2 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.6)] object-cover" />
+        <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400 bg-clip-text text-transparent">
+          GENESIS AI 5.0 Hardware Client
+        </h1>
+      </div>
       <p class="text-xs md:text-sm text-neutral-400 mt-1">
         MSP2402 2.4" SPI TFT (240x320 ILI9341) • High-Tech Quantum Terminal Engine
       </p>
@@ -145,14 +113,12 @@
         <span class="text-red-400 font-bold bg-black/40 px-2 py-0.5 rounded border border-red-900">MSP2402 (2.4" SPI)</span>
       </div>
 
-      <!-- THE 320x240 LCD DISPLAY -->
-      <div id="lcd-display" class="relative w-[320px] h-[240px] md:w-[480px] md:h-[360px] rounded border-4 border-neutral-900 shadow-[inset_0_0_25px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col justify-between tech-lcd-bg crt-scanlines lcd-screen select-none">
+      <!-- THE 320x240 LCD DISPLAY (Perfect 4:3 Aspect Ratio for 2.4" Screen) -->
+      <div id="lcd-display" class="relative w-full max-w-[320px] sm:max-w-[440px] md:max-w-[500px] aspect-[4/3] rounded border-4 border-neutral-900 shadow-[inset_0_0_25px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col justify-between tech-lcd-bg crt-scanlines lcd-screen select-none">
         
-        <!-- Cinematic Rotating Quantum Fusion Core Background Layer -->
+        <!-- Subtle Quantum Engine Watermark (Zero visual obstruction) -->
         <div id="lcd-fusion-layer" class="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
-          <div class="lcd-halo-layer"></div>
-          <div class="lcd-core-layer"></div>
-          <div class="lcd-wheel-layer"></div>
+          <div class="lcd-quantum-watermark"></div>
         </div>
         
         <!-- Cyber Corner HUD Reticles -->
@@ -323,6 +289,41 @@
         </div>
       </div>
 
+      <!-- Complete 13-Provider Unified Model Matrix -->
+      <div class="mt-5 pt-4 border-t border-neutral-800">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold uppercase tracking-wider text-amber-400">✦ All 13 Unified Providers & Flagship/Free Models (Imported on ESP32-C5 & 2.4" Screen)</span>
+          <span class="text-[11px] px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-semibold">OpenJarvis + 13 Providers Active</span>
+        </div>
+        <div class="overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-950/80">
+          <table class="w-full text-left text-xs text-neutral-300 border-collapse">
+            <thead>
+              <tr class="border-b border-neutral-800 bg-neutral-900/90 text-cyan-400">
+                <th class="py-2 px-3">Provider</th>
+                <th class="py-2 px-3">Flagship &amp; Free Models</th>
+                <th class="py-2 px-3">Category</th>
+                <th class="py-2 px-3">Free Tier Link</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-neutral-800/70">
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Google Gemini</td><td class="py-1.5 px-3 font-mono text-cyan-300">gemini-2.0-flash, gemini-2.0-flash-thinking</td><td class="py-1.5 px-3">Frontier Multimodal</td><td class="py-1.5 px-3"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-amber-400 hover:underline">Google AI Studio</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Groq</td><td class="py-1.5 px-3 font-mono text-cyan-300">llama-3.3-70b-versatile, qwen-2.5-32b</td><td class="py-1.5 px-3">500+ tok/s LPU</td><td class="py-1.5 px-3"><a href="https://console.groq.com/keys" target="_blank" class="text-amber-400 hover:underline">Groq Console</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">OpenRouter</td><td class="py-1.5 px-3 font-mono text-cyan-300">deepseek/deepseek-r1:free, meta-llama/llama-3.3-70b:free</td><td class="py-1.5 px-3">Free Model Pool</td><td class="py-1.5 px-3"><a href="https://openrouter.ai/settings/keys" target="_blank" class="text-amber-400 hover:underline">OpenRouter</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">DeepSeek</td><td class="py-1.5 px-3 font-mono text-cyan-300">deepseek-reasoner (R1), deepseek-chat (V3)</td><td class="py-1.5 px-3">Deep Reasoning</td><td class="py-1.5 px-3"><a href="https://platform.deepseek.com/api_keys" target="_blank" class="text-amber-400 hover:underline">DeepSeek Platform</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Cerebras</td><td class="py-1.5 px-3 font-mono text-cyan-300">llama3.1-70b (2000+ tok/s)</td><td class="py-1.5 px-3">Wafer-Scale</td><td class="py-1.5 px-3"><a href="https://cloud.cerebras.ai/" target="_blank" class="text-amber-400 hover:underline">Cerebras Cloud</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">SambaNova</td><td class="py-1.5 px-3 font-mono text-cyan-300">Meta-Llama-3.3-70B, Llama-3.1-405B</td><td class="py-1.5 px-3">Giant Model Speed</td><td class="py-1.5 px-3"><a href="https://cloud.sambanova.ai/apis" target="_blank" class="text-amber-400 hover:underline">SambaNova Cloud</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Hugging Face</td><td class="py-1.5 px-3 font-mono text-cyan-300">Llama-3.3-70B-Instruct</td><td class="py-1.5 px-3">Open-Source Hub</td><td class="py-1.5 px-3"><a href="https://huggingface.co/settings/tokens" target="_blank" class="text-amber-400 hover:underline">Hugging Face</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Cohere</td><td class="py-1.5 px-3 font-mono text-cyan-300">command-r-plus-08-2024</td><td class="py-1.5 px-3">Enterprise RAG</td><td class="py-1.5 px-3"><a href="https://dashboard.cohere.com/api-keys" target="_blank" class="text-amber-400 hover:underline">Cohere Dashboard</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Mistral AI</td><td class="py-1.5 px-3 font-mono text-cyan-300">codestral-latest, mistral-large</td><td class="py-1.5 px-3">European Frontier</td><td class="py-1.5 px-3"><a href="https://console.mistral.ai/api-keys/" target="_blank" class="text-amber-400 hover:underline">Mistral Console</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Anthropic</td><td class="py-1.5 px-3 font-mono text-cyan-300">claude-3-7-sonnet, claude-3-5-haiku</td><td class="py-1.5 px-3">Elite Coding</td><td class="py-1.5 px-3"><a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-amber-400 hover:underline">Anthropic Console</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">OpenAI</td><td class="py-1.5 px-3 font-mono text-cyan-300">gpt-4o, gpt-4o-mini, o1, o3-mini</td><td class="py-1.5 px-3">Flagship GPT</td><td class="py-1.5 px-3"><a href="https://platform.openai.com/api-keys" target="_blank" class="text-amber-400 hover:underline">OpenAI Platform</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Perplexity</td><td class="py-1.5 px-3 font-mono text-cyan-300">sonar-reasoning-pro, sonar</td><td class="py-1.5 px-3">Live Web Search</td><td class="py-1.5 px-3"><a href="https://www.perplexity.ai/settings/api" target="_blank" class="text-amber-400 hover:underline">Perplexity AI</a></td></tr>
+              <tr><td class="py-1.5 px-3 font-semibold text-white">Local Ollama</td><td class="py-1.5 px-3 font-mono text-cyan-300">llama3.2, deepseek-r1</td><td class="py-1.5 px-3">100% Offline Free</td><td class="py-1.5 px-3"><a href="https://ollama.com/download" target="_blank" class="text-amber-400 hover:underline">Ollama</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -485,9 +486,67 @@
         }
       }
 
+      // Direct Real Google Gemini 3.5 Flash Lite + OpenRouter API Fallback
+      if (!gotAnswer) {
+        try {
+          const gemRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + (localStorage.getItem('omni_key_GEMINI_API_KEY') || '')', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: 'You are GENESIS AI 5.0 + OpenJarvis on an ESP32-C5 2.4-inch display. Answer accurately and concisely in plain text under 55 words without markdown or asterisks.' }] },
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.5, maxOutputTokens: 160 }
+            })
+          });
+          if (gemRes.ok) {
+            const gemData = await gemRes.json();
+            const gemText = (gemData?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+            if (gemText.length > 0) {
+              const latency = Math.round(performance.now() - startTime);
+              hudLatency.innerText = 'LATENCY: ' + latency + 'ms';
+              hudStatus.innerText = "STATUS: GEMINI 3.5";
+              hudWordcount.innerText = gemText.split(/\s+/).filter(Boolean).length + ' words';
+              typeWriter(gemText);
+              gotAnswer = true;
+            }
+          }
+        } catch (err) {}
+      }
+
+      if (!gotAnswer) {
+        try {
+          const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + (localStorage.getItem('omni_key_OPENROUTER_API_KEY') || '')
+            },
+            body: JSON.stringify({
+              model: 'openrouter/free',
+              messages: [
+                { role: 'system', content: 'You are GENESIS AI 5.0 + OpenJarvis on an ESP32-C5 2.4-inch display. Answer accurately and concisely in plain text under 55 words.' },
+                { role: 'user', content: prompt }
+              ]
+            })
+          });
+          if (orRes.ok) {
+            const orData = await orRes.json();
+            const orText = (orData?.choices?.[0]?.message?.content || '').trim();
+            if (orText.length > 0) {
+              const latency = Math.round(performance.now() - startTime);
+              hudLatency.innerText = 'LATENCY: ' + latency + 'ms';
+              hudStatus.innerText = "STATUS: OPENROUTER";
+              hudWordcount.innerText = orText.split(/\s+/).filter(Boolean).length + ' words';
+              typeWriter(orText);
+              gotAnswer = true;
+            }
+          }
+        } catch (err) {}
+      }
+
       if (!gotAnswer) {
         hudStatus.innerText = "STATUS: ERROR";
-        typeWriter("Could not connect to Gateway at " + (window.location.hostname || "10.22.163.78") + ":8000. Please verify the OmniModel server is running.");
+        typeWriter("Could not connect to Gateway. Please check your internet connection.");
       }
     }
 

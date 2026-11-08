@@ -12,7 +12,7 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "category": "Frontier Multimodal & Reasoning",
         "env_var": "GEMINI_API_KEY",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
-        "default_model": "gemini-3.1-flash-lite",
+        "default_model": "gemini-3.5-flash-lite",
         "free_tier_available": True,
         "free_tier_note": "Generous free RPM on Google AI Studio without credit card",
         "free_key_url": "https://aistudio.google.com/app/apikey",
@@ -20,10 +20,9 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "catalog_url": "https://ai.google.dev/gemini-api/docs/models",
         "format_type": "gemini",
         "models": [
-            {"id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite", "context": "1M", "speed": "Ultra Fast (<500ms)", "free": True, "tags": ["fast", "free_tier", "multimodal"]},
-            {"id": "gemini-3.5-flash-lite", "name": "Gemini 3.5 Flash Lite", "context": "1M", "speed": "Ultra Fast", "free": True, "tags": ["fast", "free_tier"]},
-            {"id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash", "context": "1M", "speed": "Fast", "free": True, "tags": ["fast", "multimodal", "free_tier", "search"]},
+            {"id": "gemini-3.5-flash-lite", "name": "Gemini 3.5 Flash Lite", "context": "1M", "speed": "Ultra Fast (<500ms)", "free": True, "tags": ["fast", "free_tier", "multimodal"]},
             {"id": "gemini-3.8-flash", "name": "Gemini 3.8 Flash", "context": "1M", "speed": "High Quality", "free": True, "tags": ["frontier", "reasoning", "free_tier"]},
+            {"id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash", "context": "1M", "speed": "Fast", "free": True, "tags": ["fast", "multimodal", "free_tier", "search"]},
             {"id": "gemma-4-31b-it", "name": "Gemma 4 31B IT", "context": "128k", "speed": "Fast", "free": True, "tags": ["reasoning", "math", "code", "free_tier"]}
         ]
     },
@@ -53,7 +52,7 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "category": "Unified Multi-Model Gateway & Free Models",
         "env_var": "OPENROUTER_API_KEY",
         "base_url": "https://openrouter.ai/api/v1",
-        "default_model": "deepseek/deepseek-r1:free",
+        "default_model": "openrouter/free",
         "free_tier_available": True,
         "free_tier_note": "Dedicated 100% FREE model pool with :free suffix",
         "free_key_url": "https://openrouter.ai/settings/keys",
@@ -61,6 +60,7 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "catalog_url": "https://openrouter.ai/models",
         "format_type": "openai_compatible",
         "models": [
+            {"id": "openrouter/free", "name": "OpenRouter Free Auto-Router (100% Free)", "context": "128k", "speed": "Fast", "free": True, "tags": ["reasoning", "free_tier", "coding"]},
             {"id": "deepseek/deepseek-r1:free", "name": "DeepSeek R1 (100% Free)", "context": "64k", "speed": "Moderate", "free": True, "tags": ["reasoning", "free_tier", "coding"]},
             {"id": "meta-llama/llama-3.3-70b-instruct:free", "name": "Llama 3.3 70B (100% Free)", "context": "128k", "speed": "Fast", "free": True, "tags": ["general", "free_tier"]},
             {"id": "google/gemini-2.0-flash-exp:free", "name": "Gemini 2.0 Flash Exp (Free)", "context": "1M", "speed": "Ultra Fast", "free": True, "tags": ["multimodal", "free_tier"]},
@@ -387,11 +387,11 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
     },
     "ollama": {
         "id": "ollama",
-        "name": "Local Ollama / LM Studio",
+        "name": "Local Ollama / OpenJarvis Local Engine",
         "category": "100% Free Local Offline Privacy",
         "env_var": "OLLAMA_BASE_URL",
         "base_url": "http://localhost:11434/v1",
-        "default_model": "llama3.2:latest",
+        "default_model": "llama3.2:1b",
         "free_tier_available": True,
         "free_tier_note": "100% Free, runs locally on your GPU/CPU without internet",
         "free_key_url": "https://ollama.ai/",
@@ -399,9 +399,28 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "catalog_url": "https://ollama.ai/library",
         "format_type": "openai_compatible",
         "models": [
-            {"id": "llama3.2:latest", "name": "Ollama Llama 3.2 (Local)", "context": "128k", "speed": "Local Hardware", "free": True, "tags": ["local", "offline", "privacy", "free_tier"]},
-            {"id": "deepseek-r1:latest", "name": "Ollama DeepSeek R1 (Local)", "context": "32k", "speed": "Local Hardware", "free": True, "tags": ["local", "reasoning", "free_tier"]},
-            {"id": "qwen2.5-coder:latest", "name": "Ollama Qwen 2.5 Coder (Local)", "context": "32k", "speed": "Local Hardware", "free": True, "tags": ["local", "coding", "free_tier"]}
+            {"id": "llama3.2:1b", "name": "Ollama Llama 3.2 1B (Installed Local)", "context": "128k", "speed": "Local Hardware", "free": True, "tags": ["local", "offline", "privacy", "free_tier"]},
+            {"id": "llama3.2:latest", "name": "Ollama Llama 3.2 (Local)", "context": "128k", "speed": "Local Hardware", "free": True, "tags": ["local", "offline", "privacy", "free_tier"]}
+        ]
+    },
+    "pollinations": {
+        "id": "pollinations",
+        "name": "Pollinations Frontier Cloud AI (Zero-Key)",
+        "category": "100% Free Keyless Frontier Models",
+        "env_var": None,
+        "base_url": "https://text.pollinations.ai/openai",
+        "default_model": "openai",
+        "free_tier_available": True,
+        "free_tier_note": "100% Free Keyless Cloud GPT-4o, Llama 3.3 & DeepSeek R1",
+        "free_key_url": "https://pollinations.ai/",
+        "doc_url": "https://pollinations.ai/",
+        "catalog_url": "https://text.pollinations.ai/models",
+        "format_type": "openai_compatible",
+        "models": [
+            {"id": "openai", "name": "GPT-4o Mini / OpenAI (Keyless Cloud)", "context": "128k", "speed": "Fast", "free": True, "tags": ["fast", "free_tier", "general", "coding"]},
+            {"id": "deepseek", "name": "DeepSeek V3 / R1 (Keyless Cloud)", "context": "64k", "speed": "Fast", "free": True, "tags": ["reasoning", "coding", "free_tier"]},
+            {"id": "mistral", "name": "Mistral Small 3 (Keyless Cloud)", "context": "32k", "speed": "Ultra Fast", "free": True, "tags": ["speed", "free_tier"]}
         ]
     }
 }
+

@@ -23,7 +23,11 @@ class UniversalAdapter:
         }
 
         if provider_id == "gemini":
-            # Gemini REST API
+            # Map legacy/alias Gemini model IDs to live Gemini 3.5/3.8 models on user's key
+            if model in ("gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-1.5-flash"):
+                model = "gemini-3.5-flash-lite"
+            elif "thinking" in model or model in ("gemini-2.0-flash-thinking", "gemini-2.5-pro", "gemini-1.5-pro"):
+                model = "gemini-3.8-flash"
             target_url = f"{base_url}/models/{model}:generateContent?key={api_key or ''}"
             return target_url, headers, format_type
 
@@ -49,6 +53,10 @@ class UniversalAdapter:
             # Local Ollama default
             ollama_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             target_url = f"{ollama_base}/v1/chat/completions"
+            return target_url, headers, format_type
+
+        elif provider_id == "pollinations":
+            target_url = "https://text.pollinations.ai/openai"
             return target_url, headers, format_type
 
         else:
@@ -81,27 +89,23 @@ class UniversalAdapter:
         env_var = meta.get("env_var")
         api_key = api_key_override or (GatewayConfig.get_key(env_var) if env_var else None)
 
-        # Check if key is required and missing
-        if provider_id != "ollama" and not api_key:
-            # Yield simulated fallback / key missing advice
-            free_url = meta.get("free_key_url", "https://ai.google.dev/")
-            missing_msg = (
-                f"\n\n⚡ **[Provider Notice: {meta['name']}]**\n"
-                f"No API key detected in `.env` for `{env_var}`.\n"
-                f"- **Free Tier**: {meta.get('free_tier_note', 'Available')}\n"
-                f"- **Get API Key**: [{free_url}]({free_url})\n\n"
-                f"*To connect live: configure your key in the dashboard or in `.env`.*"
-            )
-            yield {
-                "delta": missing_msg,
-                "done": True,
-                "provider": provider_id,
-                "model": model,
-                "latency_ms": round((time.perf_counter() - start_time) * 1000, 2),
-                "error": True,
-                "status": "missing_key"
-            }
-            return
+        if provider_id == "openrouter" and (not model or model.endswith(":free")):
+            model = "openrouter/free"
+
+        # If a specific provider's key is not set in .env, seamlessly bridge through the active OPENROUTER_API_KEY or GEMINI_API_KEY
+        if provider_id not in ("ollama", "pollinations") and not api_key:
+            or_key = GatewayConfig.get_key("OPENROUTER_API_KEY")
+            gem_key = GatewayConfig.get_key("GEMINI_API_KEY")
+            if or_key:
+                provider_id = "openrouter"
+                meta = PROVIDERS_METADATA["openrouter"]
+                api_key = or_key
+                model = "openrouter/free"
+            elif gem_key:
+                provider_id = "gemini"
+                meta = PROVIDERS_METADATA["gemini"]
+                api_key = gem_key
+                model = "gemini-3.5-flash-lite"
 
         target_url, headers, format_type = cls._prepare_headers_and_url(provider_id, model, api_key)
 
@@ -124,7 +128,7 @@ class UniversalAdapter:
                         "contents": gemini_contents,
                         "generationConfig": {
                             "temperature": temperature,
-                            "maxOutputTokens": max_tokens
+                            "maxOutputTokens": max(max_tokens or 1024, 1024)
                         }
                     }
                     if system_instruction:
@@ -245,19 +249,70 @@ class UniversalAdapter:
                     else:
                         yield {"delta": f"Cohere Error ({response.status_code}): {response.text}", "done": True, "error": True}
 
+                elif provider_id == "pollinations":
+                    payload = {
+                        "model": model or "openai",
+                        "messages": messages,
+                        "temperature": temperature,
+                        "stream": False
+                    }
+                    response = await client.post(target_url, headers=headers, json=payload, timeout=18.0)
+                    latency = round((time.perf_counter() - start_time) * 1000, 2)
+                    full_text = ""
+                    if response.status_code == 200:
+                        try:
+                            data = response.json()
+                            full_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        except Exception:
+                            full_text = response.text
+                    if not full_text:
+                        # Fallback to direct GET endpoint
+                        import urllib.parse
+                        last_q = messages[-1].get("content", "Hello") if messages else "Hello"
+                        r_get = await client.get(f"https://text.pollinations.ai/{urllib.parse.quote(last_q)}", timeout=15.0)
+                        if r_get.status_code == 200:
+                            full_text = r_get.text
+
+                    if full_text and len(full_text.strip()) > 0:
+                        words = full_text.split(" ")
+                        for i, w in enumerate(words):
+                            chunk_text = w + (" " if i < len(words) - 1 else "")
+                            yield {
+                                "delta": chunk_text,
+                                "content": chunk_text,
+                                "done": False,
+                                "provider": "pollinations",
+                                "model": model or "openai",
+                                "latency_ms": latency
+                            }
+                        yield {
+                            "delta": "",
+                            "content": "",
+                            "done": True,
+                            "provider": "pollinations",
+                            "model": model or "openai",
+                            "latency_ms": latency
+                        }
+                    else:
+                        yield {"delta": "Pollinations unavailable", "done": True, "error": True, "provider": "pollinations", "model": model}
+
                 else:
                     # Standard OpenAI Compatible streaming or non-streaming
+
                     payload = {
                         "model": model,
                         "messages": messages,
                         "temperature": temperature,
-                        "max_tokens": max_tokens,
                         "stream": True
                     }
+                    if provider_id == "openrouter":
+                        payload["reasoning"] = {"exclude": True}
+                    elif max_tokens:
+                        payload["max_tokens"] = max_tokens
 
                     # Attempt streaming request
                     try:
-                        async with client.stream("POST", target_url, headers=headers, json=payload, timeout=60.0) as resp:
+                        async with client.stream("POST", target_url, headers=headers, json=payload, timeout=22.0) as resp:
                             if resp.status_code != 200:
                                 error_body = await resp.aread()
                                 yield {
@@ -282,7 +337,7 @@ class UniversalAdapter:
                                         choices = chunk_json.get("choices", [])
                                         if choices:
                                             delta = choices[0].get("delta", {})
-                                            content = delta.get("content", "") or delta.get("reasoning_content", "")
+                                            content = delta.get("content", "")
                                             if content:
                                                 yield {
                                                     "delta": content,

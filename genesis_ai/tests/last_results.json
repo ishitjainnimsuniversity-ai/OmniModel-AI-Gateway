@@ -1,0 +1,164 @@
+[
+ {
+  "test": "health + deep cloud check",
+  "pass": true,
+  "detail": "ai_ready=True cloud=47 models",
+  "secs": 0.0
+ },
+ {
+  "test": "auth: missing token rejected",
+  "pass": true,
+  "detail": "status=401",
+  "secs": 0.0
+ },
+ {
+  "test": "auth: wrong token rejected",
+  "pass": true,
+  "detail": "status=401",
+  "secs": 0.0
+ },
+ {
+  "test": "empty message -> 400",
+  "pass": true,
+  "detail": "{\"error\":{\"code\":\"empty_message\",\"message\":\"Message is empty.\",\"attempts\":[]},\"request_id\":null,\"con",
+  "secs": 0.0
+ },
+ {
+  "test": "oversize message -> 413",
+  "pass": true,
+  "detail": "status=413",
+  "secs": 0.0
+ },
+ {
+  "test": "general question",
+  "pass": true,
+  "detail": "gemini/gemini-3.5-flash: '**Alexander Graham Bell** is officially credited with inventing the first practi'",
+  "secs": 11.1
+ },
+ {
+  "test": "follow-up uses context (pronoun 'he')",
+  "pass": true,
+  "detail": "Alexander Graham Bell was born on **March 3, 1847**, in Edinburgh, Scotland.   Although he is most famous for ",
+  "secs": 8.1
+ },
+ {
+  "test": "new conversation has NO stale context",
+  "pass": true,
+  "detail": "It looks like you didn't mention who you are referring to.   Please tell me the name of the person y",
+  "secs": 2.7
+ },
+ {
+  "test": "world knowledge",
+  "pass": true,
+  "detail": "The capital of Australia is **Canberra**. \n\nIts population is roughly **460,000 to 470,000",
+  "secs": 4.1
+ },
+ {
+  "test": "science explanation",
+  "pass": true,
+  "detail": "",
+  "secs": 10.7
+ },
+ {
+  "test": "mathematics",
+  "pass": true,
+  "detail": "To calculate $48 \\times 25 + 120$, we follow the standard order of operations (m",
+  "secs": 8.1
+ },
+ {
+  "test": "write email",
+  "pass": true,
+  "detail": "333 chars",
+  "secs": 6.2
+ },
+ {
+  "test": "write long essay (~400 words)",
+  "pass": true,
+  "detail": "379 words",
+  "secs": 3.8
+ },
+ {
+  "test": "generate python code",
+  "pass": true,
+  "detail": "```python def reverse_string(s: str) -> str:     return s[::-1] ```",
+  "secs": 2.2
+ },
+ {
+  "test": "debug code",
+  "pass": true,
+  "detail": "the error occurs because you are passing an empty list (`[]`) to the `avg` function.   1. `len([])` ",
+  "secs": 3.3
+ },
+ {
+  "test": "does not fabricate live data",
+  "pass": true,
+  "detail": "I cannot provide the current Bitcoin price because I do not have live internet access to check real-time financial data.",
+  "secs": 2.3
+ },
+ {
+  "test": "repeated requests not stale",
+  "pass": true,
+  "detail": "'ALPHA' / 'BRAVO'",
+  "secs": 0.0
+ },
+ {
+  "test": "6 concurrent requests isolated",
+  "pass": true,
+  "detail": "unique ids=6",
+  "secs": 8.8
+ },
+ {
+  "test": "streaming SSE",
+  "pass": true,
+  "detail": "2 chunks",
+  "secs": 2.2
+ },
+ {
+  "test": "device chat paginates 26x8",
+  "pass": true,
+  "detail": "pages=7 chars=1100",
+  "secs": 2.9
+ },
+ {
+  "test": "device page fetch",
+  "pass": true,
+  "detail": "When you want to access a | website or send data, your | device ",
+  "secs": 0.0
+ },
+ {
+  "test": "device text is plain ASCII",
+  "pass": true,
+  "detail": "",
+  "secs": 0.0
+ },
+ {
+  "test": "memory then clear conversation",
+  "pass": true,
+  "detail": "remembered=True forgot_after_clear=True",
+  "secs": 0.0
+ },
+ {
+  "test": "invalid API key -> clear error",
+  "pass": true,
+  "detail": "auth_failed: The API key was rejected - check the key in the backend .env.",
+  "secs": 0.0
+ },
+ {
+  "test": "network down -> clear error",
+  "pass": true,
+  "detail": "network_error: The backend could not reach the AI provider (no internet?).",
+  "secs": 0.0
+ },
+ {
+  "test": "rate limit -> clear error (real 429)",
+  "pass": true,
+  "detail": "rate_limited: The AI provider's rate limit or quota was exceeded - try again later.",
+  "secs": 0.0
+ },
+ {
+  "test": "unconfigured fallback is skipped, no fake answer",
+  "pass": true,
+  "detail": "['auth_failed', 'not_configured']",
+  "secs": 0.0
+ }
+]

@@ -1,27 +1,25 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WebServer.h>
+#include <DNSServer.h>
+#include <ArduinoJson.h>
+
+WebServer server(80);
+DNSServer dnsServer;
 
 void setup() {
     Serial.begin(115200);
-    delay(1000);
-
-    Serial.println("\n\n====================================");
-    Serial.println("  GENESIS AI 5.0 - ESP32-C5 HOTSPOT  ");
-    Serial.println("====================================");
-
-    // Force 2.4GHz Channel 1 so all phones and PCs see it immediately
     WiFi.mode(WIFI_AP);
-    bool ok = WiFi.softAP("GENESIS-AI-HOTSPOT", NULL, 1, 0, 4);
-    if (ok) {
-        Serial.println("✅ Hotspot ACTIVE: GENESIS-AI-HOTSPOT (2.4GHz Ch 1)");
-        Serial.print("📍 IP: ");
-        Serial.println(WiFi.softAPIP());
-    } else {
-        Serial.println("❌ Failed softAP");
-    }
+    WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
+    WiFi.softAP("GENESIS_AI");
+    dnsServer.start(53, "*", IPAddress(192, 168, 4, 1));
+    server.on("/", []() {
+        server.send(200, "text/html", "<h1>GENESIS AI SoftAP</h1>");
+    });
+    server.begin();
 }
 
 void loop() {
-    delay(1000);
-    Serial.print(".");
+    dnsServer.processNextRequest();
+    server.handleClient();
 }
