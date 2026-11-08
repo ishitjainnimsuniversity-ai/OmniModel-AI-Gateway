@@ -662,6 +662,58 @@ async def iot_chat_endpoint(
 
     return Response(content=clean, media_type="text/plain; charset=utf-8")
 
+
+# -----------------------------------------------------------------------------
+# Global Screen Synchronization Endpoints (for Hardware 2.4" TFT Mirroring)
+# -----------------------------------------------------------------------------
+_GLOBAL_SCREEN_FEED = {
+    "version": 1,
+    "state": "READY",
+    "question": "",
+    "answer": "GENESIS AI 5.0 Online",
+    "provider": "Cloud Gateway",
+    "model": "GENESIS 5.0"
+}
+
+@app.post("/api/screen/push")
+@app.get("/api/screen/push")
+async def push_screen_endpoint(request: Request, q: Optional[str] = None, text: Optional[str] = None, state: str = "ANSWERED", model: str = "GENESIS AI", provider: str = "relay"):
+    global _GLOBAL_SCREEN_FEED
+    body = {}
+    if request.method == "POST":
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+    question = q or body.get("question") or body.get("q") or body.get("prompt") or ""
+    answer = text or body.get("text") or body.get("answer") or ""
+    cur_state = body.get("state") or state
+    cur_model = body.get("model") or model
+    cur_prov = body.get("provider") or provider
+
+    _GLOBAL_SCREEN_FEED["version"] = _GLOBAL_SCREEN_FEED.get("version", 0) + 1
+    _GLOBAL_SCREEN_FEED["state"] = cur_state
+    _GLOBAL_SCREEN_FEED["question"] = question
+    _GLOBAL_SCREEN_FEED["answer"] = answer
+    _GLOBAL_SCREEN_FEED["provider"] = cur_prov
+    _GLOBAL_SCREEN_FEED["model"] = cur_model
+    return {"status": "ok", "version": _GLOBAL_SCREEN_FEED["version"], "state": cur_state}
+
+@app.get("/api/screen/status")
+async def screen_status_endpoint():
+    return _GLOBAL_SCREEN_FEED
+
+@app.get("/api/screen/poll")
+async def screen_poll_endpoint(v: int = 0):
+    global _GLOBAL_SCREEN_FEED
+    if v == _GLOBAL_SCREEN_FEED.get("version", 0):
+        return {"changed": False, "version": _GLOBAL_SCREEN_FEED.get("version", 0)}
+    return {
+        "changed": True,
+        **_GLOBAL_SCREEN_FEED
+    }
+
+
 def main():
     port = GatewayConfig.PORT
     host = GatewayConfig.HOST
