@@ -30,5 +30,9 @@ const IPAddress SOFTAP_NETMASK(255, 255, 255, 0);
 // User input button (Built-in BOOT button on ESP32-C5)
 #define BOOT_BUTTON_PIN       28
 
+// GENESIS PHOTON Continuous Gaming Light Configuration (Onboard WS2812B RGB LED)
+#define RGB_LED_PIN           27               // Strictly GPIO 27 (Built-in addressable RGB LED)
+#define RGB_DEFAULT_BRIGHTNESS 40              // Initial 40% glare/power-optimized brightness
+
 // Power Optimization (OTG brownout protection: 15dBm caps peak TX current < 150mA)
 #define WIFI_TX_POWER_LEVEL   WIFI_POWER_15dBm

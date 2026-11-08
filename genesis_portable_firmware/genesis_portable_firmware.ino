@@ -10,6 +10,7 @@
 #include "config.h"
 #include "genesis_display.h"
 #include "dashboard.h"
+#include "genesis_photon_lighting.h"
 
 GenesisTFT tft(TFT_CS, TFT_DC, TFT_RST);
 WebServer server(80);
@@ -437,6 +438,7 @@ void setup() {
     LOG_PRINTLN("\n=== GENESIS AI: Single-Phone Portable Architecture ===");
 
     pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
+    genesisPhotonInit();
 
     // 1. Initialize Display
     SPI.begin(TFT_SCK, -1, TFT_MOSI);
@@ -495,6 +497,17 @@ void setup() {
     server.on("/api/feed", HTTP_POST, handleFeedPost);
     server.on("/api/page", HTTP_POST, handlePagePost);
     server.on("/api/clear", HTTP_POST, handleClearPost);
+    server.on("/api/rgb", HTTP_GET, []() {
+        String resp = "{\"status\":\"ok\",\"pin\":27,\"brightness\":" + String((int)genesisPhotonBrightness) + ",\"mode\":\"CONTINUOUS_GAMING\"}";
+        server.send(200, "application/json", resp);
+    });
+    server.on("/api/rgb", HTTP_POST, []() {
+        if (server.hasArg("brightness")) {
+            genesisPhotonSetBrightness(server.arg("brightness").toInt());
+        }
+        String resp = "{\"status\":\"ok\",\"pin\":27,\"brightness\":" + String((int)genesisPhotonBrightness) + ",\"mode\":\"CONTINUOUS_GAMING\"}";
+        server.send(200, "application/json", resp);
+    });
     server.on("/api/tft/image/start", HTTP_POST, handleTftImageStart);
     server.on("/api/tft/image/chunk", HTTP_POST, handleTftImageChunk);
     server.on("/api/tft/image/finish", HTTP_POST, handleTftImageFinish);
@@ -533,6 +546,7 @@ void loop() {
     server.handleClient();
     handleButton();
     handleSerialInput();
+    genesisPhotonLoop();
 
     uint32_t now = millis();
 
