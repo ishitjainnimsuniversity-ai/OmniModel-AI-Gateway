@@ -1,6 +1,7 @@
 // ==============================================================================
-// GENESIS AI — PHOTON CONTINUOUS GAMING LIGHT MODE
+// GENESIS AI — PHOTON CONTINUOUS ULTRA-VIBRANT CHROMA LIGHT MODE
 // Dedicated RGB Engine for Espressif ESP32-C5-DevKitC-1 Onboard WS2812B (GPIO 27)
+// Full Spectrum: Crimson Red -> Amber Gold -> Emerald Green -> Quantum Cyan -> Electric Blue -> Cyber Violet
 // ==============================================================================
 #pragma once
 #include <Arduino.h>
@@ -11,26 +12,30 @@
 #endif
 
 // Master configuration
-static volatile uint8_t genesisPhotonBrightness = 40; // 40% default gaming brightness
+static volatile uint8_t genesisPhotonBrightness = 45; // 45% vibrant gaming brightness
 static volatile bool genesisPhotonEnabled = true;
 
-// Keyframe RGB Colors
-// 1. Electric Blue:   #006BFF -> (0, 107, 255)
-// 2. Cyan:            #00E5FF -> (0, 229, 255)
-// 3. Emerald Green:   #00D878 -> (0, 216, 120)
+// Keyframe RGB Color Definition
 struct PhotonColor {
     uint8_t r;
     uint8_t g;
     uint8_t b;
 };
 
-static const PhotonColor COLOR_ELECTRIC_BLUE = { 0, 107, 255 };
-static const PhotonColor COLOR_CYAN          = { 0, 229, 255 };
-static const PhotonColor COLOR_EMERALD_GREEN = { 0, 216, 120 };
+// Full Chroma Spectrum of "Most Beautiful Lights"
+// Red, Amber, Green, Cyan, Royal Blue, Cyber Violet
+static const PhotonColor CHROMA_PALETTE[] = {
+    { 255,   0,  55 }, // 0. Crimson Cyber Red     (#FF0037)
+    { 255, 110,   0 }, // 1. Solar Amber Gold      (#FF6E00)
+    {   0, 240,  90 }, // 2. Emerald Neon Green     (#00F05A)
+    {   0, 235, 255 }, // 3. Quantum Vivid Cyan     (#00EBFF)
+    {   0,  95, 255 }, // 4. Electric Royal Blue    (#005FFF)
+    { 175,   0, 255 }  // 5. Arcane Cyber Violet    (#AF00FF)
+};
 
-// Cycle Timing: 6000ms total loop (2000ms per stage)
-static const uint32_t STAGE_DURATION_MS = 2000;
-static const uint32_t TOTAL_CYCLE_MS    = 6000;
+static const int NUM_CHROMA_STAGES = 6;
+static const uint32_t STAGE_DURATION_MS = 1300; // 1.3s per transition
+static const uint32_t TOTAL_CYCLE_MS = NUM_CHROMA_STAGES * STAGE_DURATION_MS; // 7.8s full loop
 
 // Non-blocking Step Function
 inline void genesisPhotonStep() {
@@ -42,39 +47,28 @@ inline void genesisPhotonStep() {
     uint32_t now = millis();
     uint32_t phase = now % TOTAL_CYCLE_MS;
 
-    PhotonColor fromCol, toCol;
-    float p = 0.0f;
+    int stage = phase / STAGE_DURATION_MS;
+    int nextStage = (stage + 1) % NUM_CHROMA_STAGES;
 
-    if (phase < STAGE_DURATION_MS) {
-        // Stage 0: Electric Blue -> Cyan
-        fromCol = COLOR_ELECTRIC_BLUE;
-        toCol   = COLOR_CYAN;
-        p = (float)phase / (float)STAGE_DURATION_MS;
-    } else if (phase < (STAGE_DURATION_MS * 2)) {
-        // Stage 1: Cyan -> Emerald Green
-        fromCol = COLOR_CYAN;
-        toCol   = COLOR_EMERALD_GREEN;
-        p = (float)(phase - STAGE_DURATION_MS) / (float)STAGE_DURATION_MS;
-    } else {
-        // Stage 2: Emerald Green -> Electric Blue
-        fromCol = COLOR_EMERALD_GREEN;
-        toCol   = COLOR_ELECTRIC_BLUE;
-        p = (float)(phase - (STAGE_DURATION_MS * 2)) / (float)STAGE_DURATION_MS;
-    }
+    uint32_t stageProgressMs = phase % STAGE_DURATION_MS;
+    float p = (float)stageProgressMs / (float)STAGE_DURATION_MS;
 
     // Cosine ease interpolation: 0.5 * (1 - cos(pi * p))
-    // Produces buttery-smooth, organic gaming PC transitions
+    // Produces buttery-smooth, organic gaming transitions
     float ease = (1.0f - cosf(p * 3.14159265f)) * 0.5f;
+
+    const PhotonColor& fromCol = CHROMA_PALETTE[stage];
+    const PhotonColor& toCol   = CHROMA_PALETTE[nextStage];
 
     float curR = (float)fromCol.r + ((float)toCol.r - (float)fromCol.r) * ease;
     float curG = (float)fromCol.g + ((float)toCol.g - (float)fromCol.g) * ease;
     float curB = (float)fromCol.b + ((float)toCol.b - (float)fromCol.b) * ease;
 
     // Gaming PC Breathing Modulation:
-    // Smooth sinusoidal pulsation between 75% and 100% of nominal brightness
-    // Cycle period ~2800ms
-    float breathSine = sinf((float)now * 0.00224f); // 2*pi / 2800 ~ 0.00224
-    float breath = 0.76f + 0.24f * (0.5f * (1.0f + breathSine));
+    // Smooth sinusoidal pulsation between 80% and 100% of nominal brightness
+    // Cycle period ~2600ms
+    float breathSine = sinf((float)now * 0.00241f); // 2*pi / 2600
+    float breath = 0.80f + 0.20f * (0.5f * (1.0f + breathSine));
 
     // Master brightness scaling (clamped 0..100%)
     float masterScale = (float)genesisPhotonBrightness / 100.0f;
@@ -94,16 +88,16 @@ static void genesisPhotonTask(void* pvParameters) {
     (void)pvParameters;
     for (;;) {
         genesisPhotonStep();
-        vTaskDelay(pdMS_TO_TICKS(25)); // 40 FPS, completely yields CPU to Wi-Fi
+        vTaskDelay(pdMS_TO_TICKS(25)); // 40 FPS, yields CPU to Wi-Fi & WebServer
     }
 }
 
 // Initializer: Called once during setup()
 inline void genesisPhotonInit() {
-    // Immediate illumination on startup (Electric Blue at 40%)
-    uint8_t initR = (uint8_t)(COLOR_ELECTRIC_BLUE.r * (genesisPhotonBrightness / 100.0f));
-    uint8_t initG = (uint8_t)(COLOR_ELECTRIC_BLUE.g * (genesisPhotonBrightness / 100.0f));
-    uint8_t initB = (uint8_t)(COLOR_ELECTRIC_BLUE.b * (genesisPhotonBrightness / 100.0f));
+    // Immediate illumination on startup (starts with vibrant Red at nominal brightness)
+    uint8_t initR = (uint8_t)(CHROMA_PALETTE[0].r * (genesisPhotonBrightness / 100.0f));
+    uint8_t initG = (uint8_t)(CHROMA_PALETTE[0].g * (genesisPhotonBrightness / 100.0f));
+    uint8_t initB = (uint8_t)(CHROMA_PALETTE[0].b * (genesisPhotonBrightness / 100.0f));
     rgbLedWrite(RGB_LED_PIN, initR, initG, initB);
 
     // Launch FreeRTOS background task on Core 0 (Priority 1 = Idle/Ambient priority)
@@ -121,7 +115,7 @@ inline void genesisPhotonInit() {
         Serial.println("[PhotonRGB] FreeRTOS task creation deferred to main loop fallback");
         s_photonTaskHandle = NULL;
     } else {
-        Serial.println("[PhotonRGB] Continuous Gaming Light Engine started on GPIO 27 (40 FPS FreeRTOS)");
+        Serial.println("[PhotonRGB] Ultra-Vibrant Full Chroma Light Engine started on GPIO 27 (40 FPS FreeRTOS)");
     }
 }
 
