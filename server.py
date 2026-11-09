@@ -7,6 +7,8 @@ import asyncio
 import json
 import os
 import re
+import shutil
+import socket
 import sys
 import time
 from pathlib import Path
@@ -36,6 +38,33 @@ from core.router import SmartRouter
 from core.analytics import AnalyticsTracker
 from core.screen_bridge import hardware_bridge
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
+
+def _is_cloud_env() -> bool:
+    return bool(
+        os.getenv("VERCEL")
+        or os.getenv("VERCEL_ENV")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("RENDER")
+        or os.getenv("DYNO")
+        or os.getenv("RAILWAY_ENVIRONMENT")
+    )
+
+
+def _is_loopback_request(request: Request) -> bool:
+    """Returns True only for direct local loopback access (not proxied via Cloudflare/Vercel/public)."""
+    if _is_cloud_env():
+        return False
+    proxy_headers = ("cf-connecting-ip", "x-vercel-id", "x-forwarded-for", "x-forwarded-host", "true-client-ip")
+    if any(request.headers.get(h) for h in proxy_headers):
+        return False
+    client_host = request.client.host if request.client else ""
+    return client_host in ("127.0.0.1", "::1", "localhost")
+
 
 app = FastAPI(
     title="OmniModel Universal AI Gateway",
@@ -64,17 +93,17 @@ if PUBLIC_DIR.exists() and PUBLIC_DIR.is_dir():
 async def get_style_css():
     css_path = PUBLIC_DIR / "style.css"
     if css_path.exists():
-        from fastapi.responses import Response
         return Response(content=css_path.read_text(encoding="utf-8"), media_type="text/css")
     return Response(content="", media_type="text/css")
+
 
 @app.get("/app.js")
 async def get_app_js():
     js_path = PUBLIC_DIR / "app.js"
     if js_path.exists():
-        from fastapi.responses import Response
         return Response(content=js_path.read_text(encoding="utf-8"), media_type="application/javascript")
     return Response(content="", media_type="application/javascript")
+
 
 @app.get("/assistant_logo.png")
 @app.get("/assistant_logo")
@@ -92,6 +121,7 @@ async def get_assistant_logo():
             return FileResponse(str(p), media_type=media)
     return JSONResponse(status_code=404, content={"error": "Logo not found"})
 
+
 @app.get("/favicon.ico")
 async def get_favicon():
     from fastapi.responses import FileResponse
@@ -99,6 +129,7 @@ async def get_favicon():
     if p.exists():
         return FileResponse(str(p), media_type="image/png")
     return Response(status_code=204)
+
 
 @app.get("/ai_wheel.png")
 async def get_ai_wheel_png():
@@ -108,6 +139,7 @@ async def get_ai_wheel_png():
         return FileResponse(str(p), media_type="image/png")
     return JSONResponse(status_code=404, content={"error": "ai_wheel not found"})
 
+
 @app.get("/quantum_core.png")
 async def get_quantum_core_png():
     from fastapi.responses import FileResponse
@@ -115,6 +147,7 @@ async def get_quantum_core_png():
     if p.exists():
         return FileResponse(str(p), media_type="image/png")
     return JSONResponse(status_code=404, content={"error": "quantum_core not found"})
+
 
 @app.get("/quantum_fusion_core.png")
 async def get_quantum_fusion_core_png():
@@ -124,6 +157,7 @@ async def get_quantum_fusion_core_png():
         return FileResponse(str(p), media_type="image/png")
     return JSONResponse(status_code=404, content={"error": "fusion core not found"})
 
+
 @app.get("/Quantum Core in a Neon Lab.png")
 async def get_quantum_core_orig_png():
     from fastapi.responses import FileResponse
@@ -132,10 +166,12 @@ async def get_quantum_core_orig_png():
         return FileResponse(str(p), media_type="image/png")
     return JSONResponse(status_code=404, content={"error": "image not found"})
 
+
 # Request Models
 class ChatMessage(BaseModel):
     role: str
     content: str
+
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -144,14 +180,16 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: Optional[int] = 2048
     stream: Optional[bool] = False
 
+
 class KeyUpdateRequest(BaseModel):
     env_var: Optional[str] = None
     env_key: Optional[str] = None
     value: Optional[str] = None
     api_key: Optional[str] = None
 
+
 class ArenaRequest(BaseModel):
-    models: List[Dict[str, str]] # [{"provider": "groq", "model": "llama-3.3-70b-versatile"}, ...]
+    models: List[Dict[str, str]]  # [{"provider": "groq", "model": "llama-3.3-70b-versatile"}, ...]
     messages: List[ChatMessage]
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 2048
@@ -166,6 +204,7 @@ async def serve_dashboard():
     if index_file.exists():
         return index_file.read_text(encoding="utf-8")
     return "<h1>OmniModel Gateway UI Loading...</h1>"
+
 
 @app.get("/screen", response_class=HTMLResponse)
 @app.get("/screen/", response_class=HTMLResponse)
@@ -189,33 +228,58 @@ async def serve_screen_preview():
         return screen_file.read_text(encoding="utf-8")
     return "<h1>2.4\" Screen Preview Loading...</h1>"
 
+
 @app.get("/ip")
-async def get_server_ip():
-    import socket
+async def get_server_ip(request: Request):
     hostname = socket.gethostname()
     all_ips = []
     wifi_ip = None
-    try:
-        import psutil
-        for iface, addrs in psutil.net_if_addrs().items():
-            for addr in addrs:
-                if addr.family == socket.AF_INET and not addr.address.startswith("127.") and not addr.address.startswith("169.254."):
-                    is_wifi = any(w in iface.lower() for w in ["wi-fi", "wireless", "wlan"])
-                    all_ips.append({"interface": iface, "ip": addr.address, "is_wifi": is_wifi})
-                    if is_wifi and not wifi_ip:
-                        wifi_ip = addr.address
-    except Exception:
-        pass
-
-    if not wifi_ip:
-        for it in all_ips:
-            if it["ip"].startswith("10.22.") or it["ip"].startswith("192.168."):
-                wifi_ip = it["ip"]
-                break
-    if not wifi_ip:
-        wifi_ip = "10.22.163.78"
-
     port = GatewayConfig.PORT
+
+    if _is_cloud_env():
+        host_hdr = request.headers.get("x-forwarded-host") or request.headers.get("host") or "omni-model-ai-gateway.vercel.app"
+        proto = request.headers.get("x-forwarded-proto") or "https"
+        base_url = f"{proto}://{host_hdr}"
+        return {
+            "status": "online",
+            "mode": "cloud",
+            "hostname": hostname,
+            "wifi_ip": host_hdr,
+            "recommended_screen_url": f"{base_url}/screen",
+            "recommended_dashboard_url": f"{base_url}/",
+            "localhost_screen_url": f"http://localhost:{port}/screen",
+            "iot_endpoint": f"{base_url}/api/iot/chat",
+            "all_interfaces": [],
+            "port": port
+        }
+
+    if psutil is not None:
+        try:
+            for iface, addrs in psutil.net_if_addrs().items():
+                for addr in addrs:
+                    if addr.family == socket.AF_INET and not addr.address.startswith("127.") and not addr.address.startswith("169.254."):
+                        is_wifi = any(w in iface.lower() for w in ["wi-fi", "wireless", "wlan"])
+                        all_ips.append({"interface": iface, "ip": addr.address, "is_wifi": is_wifi})
+                        if is_wifi and not wifi_ip:
+                            wifi_ip = addr.address
+        except Exception:
+            pass
+
+    if not wifi_ip:
+        try:
+            for ip in socket.gethostbyname_ex(hostname)[2]:
+                if not ip.startswith("127.") and not ip.startswith("169.254."):
+                    all_ips.append({"interface": "host", "ip": ip, "is_wifi": True})
+                    wifi_ip = ip
+                    break
+        except Exception:
+            pass
+
+    if not wifi_ip and all_ips:
+        wifi_ip = all_ips[0]["ip"]
+    if not wifi_ip:
+        wifi_ip = "127.0.0.1"
+
     return {
         "status": "online",
         "hostname": hostname,
@@ -227,6 +291,7 @@ async def get_server_ip():
         "all_interfaces": all_ips,
         "port": port
     }
+
 
 # -----------------------------------------------------------------------------
 # 2. OpenAI-Compatible Gateway Endpoints (/v1/models & /v1/chat/completions)
@@ -258,6 +323,7 @@ async def list_openai_models():
             })
     return {"object": "list", "data": model_list}
 
+
 @app.post("/v1/chat/completions")
 async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
     client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "127.0.0.1")
@@ -287,7 +353,7 @@ async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
 
     if req_model in genesis_profiles or req_model.startswith("profile:"):
         profile = genesis_profiles.get(req_model) if req_model in genesis_profiles else req_model.replace("profile:", "")
-        
+
         if req.stream:
             async def event_generator():
                 created = int(time.time())
@@ -307,7 +373,7 @@ async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
                             "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}]
                         }
                         yield f"data: {json.dumps(data)}\n\n"
-                
+
                 # End of stream
                 end_data = {
                     "id": f"chatcmpl-{int(time.time()*1000)}",
@@ -331,7 +397,7 @@ async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
                 delta = chunk.get("delta", "")
                 if delta:
                     full_text.append(delta)
-            
+
             content = "".join(full_text)
             return {
                 "id": f"chatcmpl-{int(time.time()*1000)}",
@@ -382,7 +448,7 @@ async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
                         "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}]
                     }
                     yield f"data: {json.dumps(data)}\n\n"
-            
+
             end_data = {
                 "id": f"chatcmpl-{int(time.time()*1000)}",
                 "object": "chat.completion.chunk",
@@ -406,7 +472,7 @@ async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
             delta = chunk.get("delta", "")
             if delta:
                 full_text.append(delta)
-        
+
         content = "".join(full_text)
         return {
             "id": f"chatcmpl-{int(time.time()*1000)}",
@@ -420,6 +486,7 @@ async def openai_chat_completions(req: ChatCompletionRequest, request: Request):
             }]
         }
 
+
 # -----------------------------------------------------------------------------
 # 3. Provider Management & Live Health Checks
 # -----------------------------------------------------------------------------
@@ -429,6 +496,7 @@ async def get_providers():
     status = GatewayConfig.get_active_providers_status(PROVIDERS_METADATA)
     return {"success": True, "providers": status, "total": len(status)}
 
+
 @app.get("/api/analytics")
 @app.get("/analytics")
 async def get_user_analytics():
@@ -436,24 +504,47 @@ async def get_user_analytics():
     summary = AnalyticsTracker.get_summary()
     return {"success": True, "analytics": summary}
 
+
 @app.post("/api/analytics/clear")
 @app.post("/analytics/clear")
 async def clear_user_analytics():
     AnalyticsTracker.clear_records()
     return {"success": True, "message": "Analytics history cleared"}
 
+
 @app.get("/api/keys")
 @app.get("/keys")
-async def get_api_keys():
+async def get_api_keys(request: Request):
+    configured = {
+        "GEMINI_API_KEY": bool(GatewayConfig.get_key("GEMINI_API_KEY")),
+        "OPENROUTER_API_KEY": bool(GatewayConfig.get_key("OPENROUTER_API_KEY")),
+        "GROQ_API_KEY": bool(GatewayConfig.get_key("GROQ_API_KEY")),
+    }
+    if not _is_loopback_request(request):
+        return {
+            "GEMINI_API_KEY": "",
+            "OPENROUTER_API_KEY": "",
+            "GROQ_API_KEY": "",
+            "configured": configured,
+            "masked": True,
+        }
     return {
         "GEMINI_API_KEY": GatewayConfig.get_key("GEMINI_API_KEY") or "",
         "OPENROUTER_API_KEY": GatewayConfig.get_key("OPENROUTER_API_KEY") or "",
         "GROQ_API_KEY": GatewayConfig.get_key("GROQ_API_KEY") or "",
+        "configured": configured,
+        "masked": False,
     }
+
 
 @app.post("/api/keys")
 @app.post("/keys")
-async def update_api_key(req: KeyUpdateRequest):
+async def update_api_key(req: KeyUpdateRequest, request: Request):
+    if not _is_loopback_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Remote/cloud environments do not allow overwriting server .env keys over HTTP; configure environment variables directly."
+        )
     target_var = (req.env_var or req.env_key or "").strip()
     target_val = (req.value or req.api_key or "").strip()
     if not target_var:
@@ -463,23 +554,30 @@ async def update_api_key(req: KeyUpdateRequest):
         return {"success": True, "message": f"Successfully updated {target_var}"}
     raise HTTPException(status_code=500, detail="Failed to write key to .env")
 
+
 @app.post("/api/ping/{provider_id}")
 @app.post("/ping/{provider_id}")
 async def ping_provider(provider_id: str):
     result = await UniversalAdapter.test_ping(provider_id)
     return result
 
+
 @app.get("/api/health")
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "OmniModel AI Gateway", "version": "2.0.0"}
+    return {
+        "status": "ok",
+        "service": "OmniModel AI Gateway",
+        "version": "2.0.0",
+        "cloud_mode": _is_cloud_env()
+    }
+
 
 # -----------------------------------------------------------------------------
 # 4. Interactive Dashboard SSE Streaming Endpoints
 # -----------------------------------------------------------------------------
 @app.post("/api/chat/stream")
 @app.post("/chat/stream")
-
 async def api_chat_stream(
     request: Request,
     messages: Optional[List[Dict[str, Any]]] = Body(None),
@@ -492,7 +590,7 @@ async def api_chat_stream(
 ):
     client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "127.0.0.1")
     user_agent = request.headers.get("user-agent", "Web-Browser")
-    
+
     if messages:
         raw_messages = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in messages]
     elif prompt:
@@ -545,7 +643,7 @@ async def api_chat_stream(
                     total_text.append(chunk["delta"])
                 chunk["content"] = chunk.get("delta", "")
                 yield f"data: {json.dumps(chunk)}\n\n"
-        
+
         latency = round((time.perf_counter() - start_time) * 1000, 1)
         tokens_est = round(len("".join(total_text)) / 4)
         AnalyticsTracker.record_request(
@@ -570,6 +668,7 @@ async def api_chat_stream(
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream")
 
+
 # -----------------------------------------------------------------------------
 # 5. Multi-Model Arena Parallel Broadcast Endpoint
 # -----------------------------------------------------------------------------
@@ -577,11 +676,16 @@ async def api_chat_stream(
 @app.post("/arena/stream")
 async def api_arena_stream(req: ArenaRequest):
     raw_messages = [{"role": m.role, "content": m.content} for m in req.messages]
-    
+    prompt_snippet = raw_messages[-1]["content"] if raw_messages else ""
+
     async def sse_arena_generator():
         queue = asyncio.Queue()
+        arena_outputs: Dict[int, List[str]] = {}
+        first_provider = "Arena"
+        first_model = "Multi-Model"
 
         async def worker(prov: str, mod: str, worker_id: int):
+            arena_outputs[worker_id] = []
             async for chunk in UniversalAdapter.chat_stream(
                 provider_id=prov,
                 model=mod,
@@ -590,6 +694,8 @@ async def api_arena_stream(req: ArenaRequest):
                 max_tokens=req.max_tokens or 2048
             ):
                 text_piece = chunk.get("delta", "") or chunk.get("content", "")
+                if text_piece and not chunk.get("error"):
+                    arena_outputs[worker_id].append(text_piece)
                 item = {
                     "arena_worker_id": worker_id,
                     "provider": prov,
@@ -608,6 +714,9 @@ async def api_arena_stream(req: ArenaRequest):
         for idx, item in enumerate(req.models):
             prov = item.get("provider", "")
             mod = item.get("model", "")
+            if idx == 0 and prov:
+                first_provider = prov
+                first_model = mod or first_model
             t = asyncio.create_task(worker(prov, mod, idx))
             tasks.append(t)
 
@@ -621,15 +730,23 @@ async def api_arena_stream(req: ArenaRequest):
             else:
                 yield f"data: {json.dumps(item)}\n\n"
 
-        full_answer = "".join(total_text)
-        try:
-            hardware_bridge.send_answer(prompt_snippet, full_answer, actual_provider, actual_model)
-        except Exception:
-            pass
+        full_answer = ""
+        for idx in sorted(arena_outputs.keys()):
+            candidate = "".join(arena_outputs[idx]).strip()
+            if candidate:
+                full_answer = candidate
+                break
+
+        if full_answer:
+            try:
+                hardware_bridge.send_answer(prompt_snippet, full_answer, first_provider, first_model)
+            except Exception:
+                pass
 
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse_arena_generator(), media_type="text/event-stream")
+
 
 # -----------------------------------------------------------------------------
 # 5. IoT & Microcontroller Endpoints (ESP32, ILI9341, Arduino)
@@ -783,9 +900,11 @@ async def iot_satellite_endpoint():
 
 
 async def _fast_race_iot_llm(raw_messages: List[Dict[str, str]], max_words: int = 52) -> str:
-    """Races multiple fast non-reasoning OpenRouter models concurrently so IoT devices always get a 1.5-2.0s response."""
+    """Races multiple fast LLM backends concurrently so IoT devices always get a fast response."""
     import httpx
     or_key = GatewayConfig.get_key("OPENROUTER_API_KEY")
+    gem_key = GatewayConfig.get_key("GEMINI_API_KEY") or GatewayConfig.get_key("GEMINI_BACKUP_KEY")
+    is_cloud = _is_cloud_env()
 
     async def call_or_model(model_id: str, fallback_models: Optional[List[str]] = None) -> str:
         if not or_key:
@@ -800,19 +919,55 @@ async def _fast_race_iot_llm(raw_messages: List[Dict[str, str]], max_words: int 
         else:
             payload["model"] = model_id
 
-        async with httpx.AsyncClient(timeout=6.0, verify=False) as client:
-            r = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
-                json=payload
-            )
-            if r.status_code == 200:
-                txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-                if len(txt) > 2:
-                    return txt
+        try:
+            async with httpx.AsyncClient(timeout=6.0, verify=False) as client:
+                r = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
+                    json=payload
+                )
+                if r.status_code == 200:
+                    txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                    if len(txt) > 2:
+                        return txt
+        except Exception:
+            pass
+        return ""
+
+    async def call_gemini() -> str:
+        if not gem_key:
+            return ""
+        try:
+            sys_text = next((m["content"] for m in raw_messages if m.get("role") == "system"), "")
+            gem_contents = [
+                {"role": "user" if m.get("role") == "user" else "model", "parts": [{"text": m.get("content", "")}]}
+                for m in raw_messages if m.get("role") != "system"
+            ]
+            payload: Dict[str, Any] = {
+                "contents": gem_contents,
+                "generationConfig": {"temperature": 0.4, "maxOutputTokens": 256}
+            }
+            if sys_text:
+                payload["systemInstruction"] = {"parts": [{"text": sys_text}]}
+            async with httpx.AsyncClient(timeout=6.0, verify=False) as client:
+                r = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={gem_key}",
+                    json=payload
+                )
+                if r.status_code == 200:
+                    cands = r.json().get("candidates", [])
+                    if cands:
+                        parts = cands[0].get("content", {}).get("parts", [])
+                        txt = "".join(p.get("text", "") for p in parts).strip()
+                        if len(txt) > 2:
+                            return txt
+        except Exception:
+            pass
         return ""
 
     async def call_local_ollama() -> str:
+        if is_cloud:
+            return ""
         try:
             async with httpx.AsyncClient(timeout=4.5) as client:
                 r = await client.post(
@@ -827,20 +982,46 @@ async def _fast_race_iot_llm(raw_messages: List[Dict[str, str]], max_words: int 
             pass
         return ""
 
+    async def call_pollinations() -> str:
+        if or_key or gem_key or not is_cloud:
+            await asyncio.sleep(0.35)
+        try:
+            async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
+                r = await client.post(
+                    "https://text.pollinations.ai/openai",
+                    headers={"Content-Type": "application/json"},
+                    json={"model": "openai", "messages": raw_messages, "temperature": 0.4, "stream": False}
+                )
+                if r.status_code == 200:
+                    txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                    if len(txt) > 2:
+                        return txt
+        except Exception:
+            pass
+        try:
+            import urllib.parse
+            last_q = next((m["content"] for m in reversed(raw_messages) if m.get("role") == "user"), "Hello")
+            async with httpx.AsyncClient(timeout=7.0, verify=False) as client:
+                r_get = await client.get(f"https://text.pollinations.ai/{urllib.parse.quote(last_q)}")
+                if r_get.status_code == 200:
+                    txt = r_get.text.strip()
+                    if len(txt) > 2:
+                        return txt
+        except Exception:
+            pass
+        return ""
+
     tasks = [
         asyncio.create_task(call_local_ollama()),
+        asyncio.create_task(call_gemini()),
         asyncio.create_task(call_or_model("nvidia/nemotron-3-ultra-550b-a55b:free")),
-        asyncio.create_task(call_or_model("liquid/lfm-2.5-2.6b:free")),
-        asyncio.create_task(call_or_model("xingchen-agi/xing4.0-29b-a4b:free")),
-        asyncio.create_task(call_or_model(
-            "openrouter/free",
-            ["nvidia/nemotron-3-ultra-550b-a55b:free", "liquid/lfm-2.5-2.6b:free", "openrouter/free"]
-        ))
+        asyncio.create_task(call_or_model("openrouter/free")),
+        asyncio.create_task(call_pollinations()),
     ]
     winner_text = ""
     try:
         while tasks:
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED, timeout=6.2)
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED, timeout=8.5)
             if not done:
                 break
             for d in done:
@@ -961,6 +1142,8 @@ async def iot_chat_endpoint(
             clean = " ".join(w_words[:max_words])
             if len(w_words) > max_words:
                 clean += "..."
+        else:
+            clean = _clean_for_24inch_tft(SmartRouter.generate_uninterrupted_fallback(user_prompt))
     else:
         if not web_task.done():
             web_task.cancel()
@@ -985,7 +1168,6 @@ async def iot_chat_endpoint(
         }
 
     return Response(content=clean, media_type="text/plain; charset=utf-8")
-
 
 
 @app.post("/api/screen/push")
@@ -1043,57 +1225,71 @@ async def screen_register_endpoint(request: Request):
     return {"status": "error", "detail": "missing IP"}
 
 
-
 @app.get("/api/system/resources")
 async def system_resources_endpoint():
-    import socket, psutil, shutil, httpx
-    
-    online = False
+    import httpx
+    is_cloud = _is_cloud_env()
+    online = SmartRouter.check_internet()
+
+    ollama_info = {"status": "cloud_disabled" if is_cloud else "stopped", "models": []}
+    if not is_cloud:
+        try:
+            async with httpx.AsyncClient(timeout=1.5) as client:
+                r = await client.get("http://127.0.0.1:11434/api/tags")
+                if r.status_code == 200:
+                    models = [m.get("name") for m in r.json().get("models", [])]
+                    ollama_info = {"status": "running", "models": models}
+        except Exception:
+            pass
+
+    disk_target = "C:\\" if sys.platform == "win32" else "/"
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(0.5)
-        s.connect(("1.1.1.1", 53))
-        s.close()
-        online = True
+        disk = shutil.disk_usage(disk_target)
+        disk_free_gb = round(disk.free / (1024**3), 1)
+        disk_total_gb = round(disk.total / (1024**3), 1)
     except Exception:
-        online = False
+        disk_free_gb = 0.0
+        disk_total_gb = 0.0
 
-    ollama_info = {"status": "stopped", "models": []}
-    try:
-        async with httpx.AsyncClient(timeout=1.5) as client:
-            r = await client.get("http://127.0.0.1:11434/api/tags")
-            if r.status_code == 200:
-                models = [m.get("name") for m in r.json().get("models", [])]
-                ollama_info = {"status": "running", "models": models}
-    except Exception:
-        pass
+    if psutil is not None:
+        mem = psutil.virtual_memory()
+        ram_total_gb = round(mem.total / (1024**3), 1)
+        ram_available_gb = round(mem.available / (1024**3), 1)
+        cpu_phys = psutil.cpu_count(logical=False)
+        cpu_log = psutil.cpu_count(logical=True)
+        cpu_pct = psutil.cpu_percent()
+    else:
+        ram_total_gb = 0.0
+        ram_available_gb = 0.0
+        cpu_phys = os.cpu_count() or 1
+        cpu_log = os.cpu_count() or 1
+        cpu_pct = 0.0
 
-    mem = psutil.virtual_memory()
-    disk = shutil.disk_usage("C:")
-
-    rec_model = "llama3.2:1b"
-    rec_reason = "1.3GB lightweight model, optimal for current available system RAM."
+    rec_model = "openai (Pollinations Cloud)" if is_cloud else "llama3.2:1b"
+    rec_reason = (
+        "Serverless Cloud Gateway active with zero-key frontier routing."
+        if is_cloud
+        else "1.3GB lightweight model, optimal for current available system RAM."
+    )
 
     return {
         "status": "ok",
+        "cloud_mode": is_cloud,
         "internet_connected": online,
-        "mode": "ONLINE DUAL BRAIN" if online else "OFFLINE LOCAL BRAIN",
+        "mode": "CLOUD FRONTIER GATEWAY" if is_cloud else ("ONLINE DUAL BRAIN" if online else "OFFLINE LOCAL BRAIN"),
         "ollama": ollama_info,
         "recommended_model": rec_model,
         "recommendation_reason": rec_reason,
         "resources": {
-            "ram_total_gb": round(mem.total / (1024**3), 1),
-            "ram_available_gb": round(mem.available / (1024**3), 1),
-            "cpu_physical_cores": psutil.cpu_count(logical=False),
-            "cpu_logical_cores": psutil.cpu_count(logical=True),
-            "cpu_percent": psutil.cpu_percent(),
-            "disk_free_gb": round(disk.free / (1024**3), 1),
-            "disk_total_gb": round(disk.total / (1024**3), 1)
+            "ram_total_gb": ram_total_gb,
+            "ram_available_gb": ram_available_gb,
+            "cpu_physical_cores": cpu_phys,
+            "cpu_logical_cores": cpu_log,
+            "cpu_percent": cpu_pct,
+            "disk_free_gb": disk_free_gb,
+            "disk_total_gb": disk_total_gb
         },
-        "screen_bridge": {
-            "port": "COM4",
-            "connected": hardware_bridge.ser is not None and hardware_bridge.ser.is_open
-        }
+        "screen_bridge": hardware_bridge.get_status()
     }
 
 
@@ -1106,6 +1302,7 @@ def main():
     print(f"🌐 Web Dashboard & Multi-Model Arena ready at http://{host}:{port}/")
     print("==================================================================")
     uvicorn.run("server:app", host=host, port=port, reload=False)
+
 
 if __name__ == "__main__":
     main()

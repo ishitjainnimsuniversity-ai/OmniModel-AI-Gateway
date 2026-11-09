@@ -75,9 +75,9 @@
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
         <span>ESP32-C5 ONLINE</span>
         <span class="text-cyan-600">•</span>
-        <span>10.22.163.73</span>
+        <span>Wi-Fi 6 WPA3</span>
         <span class="text-cyan-600">•</span>
-        <span class="text-emerald-400">Wi-Fi 6 WPA3</span>
+        <span class="text-emerald-400">GENESIS PHOTON RGB</span>
       </div>
       <div class="flex items-center justify-center gap-3 mt-2">
         <img src="assistant_logo.png" alt="Quantum Engine" class="w-9 h-9 rounded-full border-2 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.6)] object-cover" />
@@ -118,7 +118,7 @@
         
         <!-- Subtle Quantum Engine Watermark (Zero visual obstruction) -->
         <div id="lcd-fusion-layer" class="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
-          <div class="lcd-quantum-watermark"></div>
+          <div class="lcd-quantum-watermark lcd-core-layer lcd-wheel-layer"></div>
         </div>
         
         <!-- Cyber Corner HUD Reticles -->
@@ -184,7 +184,7 @@
         <div class="w-full bg-[#0d1624]/90 border-t border-neutral-700/80 px-3 py-1 flex items-center justify-between text-[10px] md:text-[11px] text-neutral-300 backdrop-blur-sm z-10">
           <div class="flex items-center gap-1.5 truncate">
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span id="lcd-status" class="truncate font-mono">WiFi: Lost Case (10.22.163.73) • -48dBm</span>
+            <span id="lcd-status" class="truncate font-mono">WiFi: Dual-Brain Sync Ready</span>
           </div>
           <span class="text-cyan-400 font-mono text-[10px] ml-2 shrink-0">RISC-V 240MHz</span>
         </div>
@@ -405,10 +405,10 @@
       document.getElementById('lcd-prompt').innerText = "ESP32-C5 Hardware Diagnostics";
       const stats = 
         "• MCU: ESP32-C5 (RISC-V 240MHz)\n" +
-        "• Wi-Fi: 802.11ax Wi-Fi 6 (Lost Case)\n" +
-        "• IP: 10.22.163.73 | RSSI: -48 dBm\n" +
+        "• Wi-Fi: 802.11ax Wi-Fi 6 Dual-Band\n" +
+        "• RGB: GENESIS PHOTON GPIO27 Chroma\n" +
         "• Display: 2.4\" ILI9341 SPI (320x240)\n" +
-        "• Gateway: " + (window.location.host || "10.22.163.78:8000") + " [SPEED ROUTER]\n" +
+        "• Gateway: " + (window.location.host || "localhost:8000") + " [SPEED ROUTER]\n" +
         "• Dynamic RAM: 327KB | Flash: 4MB";
       typeWriter(stats);
     }
@@ -442,17 +442,16 @@
 
       const startTime = performance.now();
       const queryParam = encodeURIComponent(prompt);
+      const isHttps = window.location.protocol === 'https:';
       const candidates = [];
       if (window.location.protocol && window.location.protocol.startsWith('http')) {
         candidates.push(window.location.origin + '/api/iot/chat?format=text&q=' + queryParam);
         candidates.push('/api/iot/chat?format=text&q=' + queryParam);
       }
-      candidates.push('http://10.22.163.78:8000/api/iot/chat?format=text&q=' + queryParam);
-      if (window.location.hostname && window.location.hostname !== '10.22.163.78') {
-        candidates.push('http://' + window.location.hostname + ':8000/api/iot/chat?format=text&q=' + queryParam);
+      if (!isHttps) {
+        candidates.push('http://localhost:8000/api/iot/chat?format=text&q=' + queryParam);
+        candidates.push('http://127.0.0.1:8000/api/iot/chat?format=text&q=' + queryParam);
       }
-      candidates.push('http://localhost:8000/api/iot/chat?format=text&q=' + queryParam);
-      candidates.push('http://127.0.0.1:8000/api/iot/chat?format=text&q=' + queryParam);
 
       let gotAnswer = false;
       for (const url of candidates) {
@@ -486,10 +485,11 @@
         }
       }
 
-      // Direct Real Google Gemini 3.5 Flash Lite + OpenRouter API Fallback
-      if (!gotAnswer) {
+      // Direct Real Google Gemini 3.5 Flash Lite (if user stored browser key)
+      const storedGemKey = (localStorage.getItem('omni_key_GEMINI_API_KEY') || '').trim();
+      if (!gotAnswer && storedGemKey) {
         try {
-          const gemRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + (localStorage.getItem('omni_key_GEMINI_API_KEY') || '')', {
+          const gemRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + storedGemKey, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -513,13 +513,15 @@
         } catch (err) {}
       }
 
-      if (!gotAnswer) {
+      // Direct OpenRouter fallback (if user stored browser key)
+      const storedOrKey = (localStorage.getItem('omni_key_OPENROUTER_API_KEY') || '').trim();
+      if (!gotAnswer && storedOrKey) {
         try {
           const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + (localStorage.getItem('omni_key_OPENROUTER_API_KEY') || '')
+              'Authorization': 'Bearer ' + storedOrKey
             },
             body: JSON.stringify({
               model: 'openrouter/free',
@@ -538,6 +540,36 @@
               hudStatus.innerText = "STATUS: OPENROUTER";
               hudWordcount.innerText = orText.split(/\s+/).filter(Boolean).length + ' words';
               typeWriter(orText);
+              gotAnswer = true;
+            }
+          }
+        } catch (err) {}
+      }
+
+      // Keyless Pollinations Cloud Frontier fallback (works globally with zero API keys)
+      if (!gotAnswer) {
+        try {
+          const polRes = await fetch('https://text.pollinations.ai/openai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'openai',
+              messages: [
+                { role: 'system', content: 'You are GENESIS AI 5.0 on an ESP32-C5 2.4-inch display. Answer accurately and concisely in plain text under 55 words.' },
+                { role: 'user', content: prompt }
+              ],
+              stream: false
+            })
+          });
+          if (polRes.ok) {
+            const polData = await polRes.json();
+            const polText = (polData?.choices?.[0]?.message?.content || '').trim();
+            if (polText.length > 0) {
+              const latency = Math.round(performance.now() - startTime);
+              hudLatency.innerText = 'LATENCY: ' + latency + 'ms';
+              hudStatus.innerText = "STATUS: CLOUD AI";
+              hudWordcount.innerText = polText.split(/\s+/).filter(Boolean).length + ' words';
+              typeWriter(polText);
               gotAnswer = true;
             }
           }

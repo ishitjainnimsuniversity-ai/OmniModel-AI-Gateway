@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/**/*.py": {
-      "includeFiles": "core/**"
+      "includeFiles": "**"
     }
   },
   "rewrites": [
@@ -12,11 +12,19 @@
     },
     {
       "source": "/favicon.ico",
-      "destination": "/public/logo.png"
+      "destination": "/public/assistant_logo.png"
     },
     {
-      "source": "/(style.css|app.js|logo.png|ai_bg.jpg|ai_wheel.png|genesis_logo.png|alfa_logo.png)",
+      "source": "/(style.css|app.js|assistant_logo.png|assistant_avatar.jpg|quantum_engine.png|quantum_engine_logo.jpg|quantum_core.png|quantum_fusion_core.png|ai_wheel.png|screen_preview.html)",
       "destination": "/public/$1"
+    },
+    {
+      "source": "/(screen|screen_preview|preview|display|hardware|iot|simulator|lcd)",
+      "destination": "/public/screen_preview.html"
+    },
+    {
+      "source": "/(screen|preview|display|hardware|iot|simulator|lcd)/",
+      "destination": "/public/screen_preview.html"
     },
     {
       "source": "/v1/(.*)",
@@ -31,7 +39,15 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/health",
+      "source": "/(health|ip|chat/stream|arena/stream|providers|analytics|keys)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/analytics/clear",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/ping/(.*)",
       "destination": "/api/index.py"
     },
     {

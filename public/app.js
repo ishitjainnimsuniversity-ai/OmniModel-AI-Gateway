@@ -2008,7 +2008,25 @@ async function queryRealClientSideLLM(prompt, messages, systemInstruction) {
         }
     }
 
-    // 3. Try Local Ollama Daemon directly (100% Offline Free)
+    // 3. Try Pollinations Frontier Cloud AI (100% Keyless Worldwide Fallback)
+    try {
+        const polRes = await fetch('https://text.pollinations.ai/openai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'openai', messages: msgList, temperature: 0.7, stream: false })
+        });
+        if (polRes.ok) {
+            const polData = await polRes.json();
+            const polText = (polData?.choices?.[0]?.message?.content || '').trim();
+            if (polText.length > 0) {
+                return polText;
+            }
+        }
+    } catch (e) {
+        console.warn("[Pollinations fallback]:", e);
+    }
+
+    // 4. Try Local Ollama Daemon directly (100% Offline Free)
     try {
         const res = await fetch('http://localhost:11434/v1/chat/completions', {
             method: 'POST',
@@ -2093,8 +2111,8 @@ async function streamMasterOmniCascade(prompt, currentChat, bodyEl, updateSpeedC
     // Try Local Gateway endpoints first (/api/chat/stream, localhost:8000, 10.22.163.78:8000)
     const gatewayEndpoints = [
         '/api/chat/stream',
-        'http://localhost:8000/api/chat/stream',
-        'http://10.22.163.78:8000/api/chat/stream'
+        ...(window.location.protocol === 'https:' ? [] : ['http://localhost:8000/api/chat/stream']),
+        ...(window.location.protocol === 'https:' ? [] : ['http://127.0.0.1:8000/api/chat/stream'])
     ];
 
     for (const gwUrl of gatewayEndpoints) {

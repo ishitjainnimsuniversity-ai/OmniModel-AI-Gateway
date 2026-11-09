@@ -106,6 +106,17 @@ class UniversalAdapter:
                 meta = PROVIDERS_METADATA["gemini"]
                 api_key = gem_key
                 model = "gemini-3.5-flash-lite"
+            else:
+                yield {
+                    "delta": f"Missing API key for {meta.get('name', provider_id)}",
+                    "content": "",
+                    "done": True,
+                    "error": True,
+                    "status": "missing_key",
+                    "provider": provider_id,
+                    "model": model
+                }
+                return
 
         target_url, headers, format_type = cls._prepare_headers_and_url(provider_id, model, api_key)
 
@@ -405,6 +416,20 @@ class UniversalAdapter:
                     return {"provider": provider_id, "status": "offline", "latency_ms": latency, "message": "Ollama not running locally"}
             except Exception as e:
                 return {"provider": provider_id, "status": "offline", "latency_ms": 0, "message": "Ollama offline"}
+
+        if provider_id == "pollinations":
+            try:
+                async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
+                    resp = await client.post(
+                        "https://text.pollinations.ai/openai",
+                        json={"model": "openai", "messages": [{"role": "user", "content": "OK"}], "stream": False}
+                    )
+                    latency = round((time.perf_counter() - start) * 1000, 2)
+                    if resp.status_code == 200:
+                        return {"provider": provider_id, "status": "active", "latency_ms": latency, "message": "Connected successfully (Keyless Cloud)"}
+                    return {"provider": provider_id, "status": "error", "latency_ms": latency, "message": f"HTTP {resp.status_code}"}
+            except Exception as e:
+                return {"provider": provider_id, "status": "error", "latency_ms": 0, "message": str(e)}
 
         if not api_key:
             return {

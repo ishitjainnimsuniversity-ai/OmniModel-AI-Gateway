@@ -12,6 +12,18 @@ from core.providers import PROVIDERS_METADATA
 from core.config import GatewayConfig
 from core.adapters import UniversalAdapter
 
+
+def _is_cloud_env() -> bool:
+    return bool(
+        os.getenv("VERCEL")
+        or os.getenv("VERCEL_ENV")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("RENDER")
+        or os.getenv("DYNO")
+        or os.getenv("RAILWAY_ENVIRONMENT")
+    )
+
+
 class SmartRouter:
     ROUTING_PROFILES = {
         "local_offline": {
@@ -87,14 +99,18 @@ class SmartRouter:
     @classmethod
     def check_internet(cls) -> bool:
         """Fast non-blocking test to check if external internet is available."""
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(0.5)
-            s.connect(("1.1.1.1", 53))
-            s.close()
+        if _is_cloud_env():
             return True
-        except Exception:
-            return False
+        for host, port in [("1.1.1.1", 443), ("1.1.1.1", 53), ("8.8.8.8", 443)]:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.5)
+                s.connect((host, port))
+                s.close()
+                return True
+            except Exception:
+                continue
+        return False
 
     @classmethod
     def classify_intent(cls, prompt: str) -> Tuple[str, float, str]:
@@ -105,7 +121,7 @@ class SmartRouter:
         text = prompt.lower().strip()
 
         # If user explicitly asks for offline / local
-        if any(k in text for k in ["offline", "local model", "run locally", "without internet", "ollama"]):
+        if not _is_cloud_env() and any(k in text for k in ["offline", "local model", "run locally", "without internet", "ollama"]):
             return "local_offline", 0.99, "User requested local offline execution via Ollama."
 
         # Check for explicit code keywords
@@ -148,6 +164,7 @@ class SmartRouter:
         If offline: immediately locks to Local Ollama Brain without network timeouts.
         If online: routes to Frontier Cloud AI with instant fallback to Local Ollama.
         """
+        is_cloud = _is_cloud_env()
         last_prompt = messages[-1].get("content", "") if messages else ""
         if profile_override and profile_override in cls.ROUTING_PROFILES:
             profile_key = profile_override
@@ -157,18 +174,20 @@ class SmartRouter:
             profile_key, confidence, rationale = cls.classify_intent(last_prompt)
 
         is_online = cls.check_internet()
-        
+
         # Dual-Brain Auto-Decision:
-        if not is_online or profile_key == "local_offline":
+        if not is_cloud and (not is_online or profile_key == "local_offline"):
             active_brain = "OFFLINE"
             chain = [("ollama", "llama3.2:1b")]
             rationale = "Operating in 100% Offline Mode on Windows Laptop (Ollama llama3.2:1b). Zero internet required."
             profile_name = "💻 Local Offline Brain"
             confidence = 1.0
         else:
-            active_brain = "ONLINE"
+            active_brain = "CLOUD" if is_cloud else "ONLINE"
+            if is_cloud and profile_key == "local_offline":
+                profile_key = "general"
             profile = cls.ROUTING_PROFILES[profile_key]
-            chain = profile["chain"]
+            chain = [pair for pair in profile["chain"] if not (is_cloud and pair[0] == "ollama")]
             profile_name = profile["name"]
 
         # Yield routing metadata header
@@ -185,6 +204,8 @@ class SmartRouter:
         # Try providers down the waterfall chain
         success = False
         attempted_providers = []
+        used_provider = "pollinations" if is_cloud else "ollama"
+        used_model = "openai" if is_cloud else "llama3.2:1b"
 
         for provider_id, model in chain:
             meta = PROVIDERS_METADATA.get(provider_id, {})
@@ -219,10 +240,13 @@ class SmartRouter:
                         }
                         break
                     else:
-                        got_content = True
+                        if chunk.get("delta"):
+                            got_content = True
                         chunk["content"] = chunk.get("delta", "")
                         chunk["provider"] = provider_id
                         chunk["model"] = model
+                        used_provider = provider_id
+                        used_model = model
                         yield chunk
             except Exception as e:
                 had_error = True
@@ -239,6 +263,8 @@ class SmartRouter:
         if not success:
             last_prompt = messages[-1].get("content", "") if messages else "Hello"
             fallback_answer = cls.generate_uninterrupted_fallback(last_prompt)
+            fb_provider = "pollinations" if is_cloud else "ollama"
+            fb_model = "openai" if is_cloud else "llama3.2:1b"
             words = fallback_answer.split(" ")
             for i, w in enumerate(words):
                 chunk_text = w + (" " if i < len(words) - 1 else "")
@@ -246,44 +272,57 @@ class SmartRouter:
                     "delta": chunk_text,
                     "content": chunk_text,
                     "done": False,
-                    "provider": "ollama",
-                    "model": "llama3.2:1b"
+                    "provider": fb_provider,
+                    "model": fb_model
                 }
             yield {
                 "delta": "",
                 "content": "",
                 "done": True,
-                "provider": "ollama",
-                "model": "llama3.2:1b"
+                "provider": fb_provider,
+                "model": fb_model
             }
 
     @classmethod
     def generate_uninterrupted_fallback(cls, prompt: str) -> str:
         """
-        Guaranteed local offline execution via Ollama on Windows localhost:11434.
+        Guaranteed fallback via Local Ollama (when running locally) and Pollinations Cloud.
         """
-        import httpx
-        # 1. Local Ollama first
+        # 1. Local Ollama first (skip inside cloud containers)
+        if not _is_cloud_env():
+            try:
+                r = httpx.post(
+                    "http://localhost:11434/v1/chat/completions",
+                    json={"model": "llama3.2:1b", "messages": [{"role": "user", "content": prompt}]},
+                    timeout=12.0
+                )
+                if r.status_code == 200:
+                    ans = r.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                    if ans:
+                        return ans
+            except Exception:
+                pass
+
+        # 2. Cloud fallback (Pollinations POST then GET)
         try:
-            r = httpx.post(
-                "http://localhost:11434/v1/chat/completions",
-                json={"model": "llama3.2:1b", "messages": [{"role": "user", "content": prompt}]},
+            r_post = httpx.post(
+                "https://text.pollinations.ai/openai",
+                json={"model": "openai", "messages": [{"role": "user", "content": prompt}], "stream": False},
                 timeout=12.0
             )
-            if r.status_code == 200:
-                ans = r.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            if r_post.status_code == 200:
+                ans = (r_post.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
                 if ans:
                     return ans
         except Exception:
             pass
 
-        # 2. Cloud fallback if online
         try:
             import urllib.parse
-            r2 = httpx.get(f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}", timeout=8.0)
+            r2 = httpx.get(f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}", timeout=10.0)
             if r2.status_code == 200 and r2.text.strip():
                 return r2.text.strip()
         except Exception:
             pass
 
-        return f"GENESIS AI [Local Offline]: Processed request for {prompt}"
+        return f"GENESIS AI: Processed request for {prompt}"

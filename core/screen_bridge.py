@@ -6,12 +6,27 @@ Supports DUAL HYBRID OPERATION:
 """
 
 import json
+import os
 import re
 import socket
 import threading
 import time
 import urllib.request
-import serial
+
+try:
+    import serial
+except ImportError:
+    serial = None
+
+IS_CLOUD_RUNTIME = bool(
+    os.getenv("VERCEL")
+    or os.getenv("VERCEL_ENV")
+    or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+    or os.getenv("RENDER")
+    or os.getenv("DYNO")
+    or os.getenv("RAILWAY_ENVIRONMENT")
+)
+
 
 class HardwareScreenBridge:
     def __init__(self, port=r"\\.\COM4", baud=115200, default_ip="10.33.110.73"):
@@ -21,7 +36,8 @@ class HardwareScreenBridge:
         self._lock = threading.Lock()
         self._last_sent_state = ""
         self._last_sent_time = 0.0
-        
+        self.cloud_mode = IS_CLOUD_RUNTIME
+
         # Global Feed Cache for Worldwide Polling
         self.latest_feed = {
             "version": 1,
@@ -32,20 +48,22 @@ class HardwareScreenBridge:
             "model": "GENESIS AI 5.0",
             "timestamp": time.time()
         }
-        
+
         # Wi-Fi Sync State
-        self.esp_wifi_ip = default_ip
+        self.esp_wifi_ip = "" if self.cloud_mode else default_ip
         self._wifi_ok = False
         self._last_scan_time = 0.0
-        
-        # Connect USB if available (non-blocking)
-        self._connect_usb()
-        self._start_usb_reader()
-        
-        # Start Wi-Fi Scanner & Health Monitor
-        self._start_wifi_monitor()
+
+        # Skip USB serial & LAN scanner background threads inside serverless/cloud containers
+        if not self.cloud_mode:
+            self._connect_usb()
+            self._start_usb_reader()
+            self._start_wifi_monitor()
 
     def _connect_usb(self):
+        if serial is None or self.cloud_mode:
+            self.ser = None
+            return False
         try:
             if self.ser:
                 try:
@@ -198,6 +216,7 @@ class HardwareScreenBridge:
 
     def get_status(self) -> dict:
         return {
+            "cloud_mode": self.cloud_mode,
             "usb_connected": bool(self.ser and self.ser.is_open),
             "wifi_ip": self.esp_wifi_ip,
             "wifi_connected": self._wifi_ok,
@@ -258,6 +277,11 @@ class HardwareScreenBridge:
             "text": clean_ans
         }
 
+        if self.cloud_mode:
+            self._last_sent_state = state
+            self._last_sent_time = time.time()
+            return True
+
         success = False
 
         # Channel 1: Wi-Fi Sync (Works on wall charger & anywhere in the room)
@@ -304,6 +328,7 @@ class HardwareScreenBridge:
         if disp_provider in ("router", "relay", "gateway", ""):
             disp_provider = "Gemini"
         return self.send_feed("ANSWERED", question, disp_provider, model, text)
+
 
 # Global singleton instance
 hardware_bridge = HardwareScreenBridge()

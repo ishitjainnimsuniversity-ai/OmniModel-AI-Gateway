@@ -1,0 +1,37 @@
+# Secrets & Local Runtime Data
+.env
+.env.*
+*.log
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+
+# Embedded Firmware & Large Hardware Assets
+esp32_firmware/
+genesis_portable_firmware/
+genesis_ai_firmware/
+test_ap/
+backups/
+scratch/
+data/
+*.bin
+*.elf
+*.map
+
+# Local Package / Tests / Tunnel
+genesis_ai/
+LIVE_PUBLIC_URL.txt
+launch_public_tunnel.py
+antigravity_bridge.py
+start.bat
+start.ps1
+run_background.bat
+start_background.vbs
+stop_background.bat
+Dockerfile
+docker-compose.yml
+render.yaml
+Procfile
+test_*.py
