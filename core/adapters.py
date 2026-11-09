@@ -51,7 +51,7 @@ class UniversalAdapter:
 
         elif provider_id == "ollama":
             # Local Ollama default
-            ollama_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            ollama_base = (os.getenv("OLLAMA_BASE_URL") or "").strip() or "http://localhost:11434"
             target_url = f"{ollama_base}/v1/chat/completions"
             return target_url, headers, format_type
 

@@ -16,9 +16,19 @@ if ENV_FILE.exists():
 else:
     load_dotenv(override=True)
 
+def _safe_int_env(var_name: str, default: int) -> int:
+    raw = (os.getenv(var_name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 class GatewayConfig:
-    PORT: int = int(os.getenv("PORT", "8000"))
-    HOST: str = os.getenv("HOST", "0.0.0.0")
+    PORT: int = _safe_int_env("PORT", 8000)
+    HOST: str = (os.getenv("HOST") or "").strip() or "0.0.0.0"
 
     @classmethod
     def reload_env(cls):

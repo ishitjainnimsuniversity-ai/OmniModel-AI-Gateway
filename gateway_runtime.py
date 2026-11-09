@@ -45,8 +45,8 @@ except Exception:
     PROVIDERS_METADATA = {}
 
     class GatewayConfig:  # type: ignore
-        PORT = int(os.getenv("PORT", "8000"))
-        HOST = os.getenv("HOST", "0.0.0.0")
+        PORT = int(((os.getenv("PORT") or "").strip()) or "8000") if ((os.getenv("PORT") or "").strip().isdigit()) else 8000
+        HOST = (os.getenv("HOST") or "").strip() or "0.0.0.0"
 
         @classmethod
         def get_key(cls, k: str):
@@ -992,6 +992,8 @@ async def _fast_race_iot_llm(raw_messages: List[Dict[str, str]], max_words: int 
                     txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
                     if len(txt) > 2:
                         return txt
+                elif r.status_code in (402, 429):
+                    return ""
         except Exception:
             pass
         return ""
@@ -1040,6 +1042,8 @@ async def _fast_race_iot_llm(raw_messages: List[Dict[str, str]], max_words: int 
                     txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
                     if len(txt) > 2:
                         return txt
+                elif r.status_code in (402, 429):
+                    return ""
         except Exception:
             pass
         return ""
@@ -1058,6 +1062,8 @@ async def _fast_race_iot_llm(raw_messages: List[Dict[str, str]], max_words: int 
                     txt = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
                     if len(txt) > 2:
                         return txt
+                elif r.status_code in (402, 429):
+                    return ""
         except Exception:
             pass
         try:
