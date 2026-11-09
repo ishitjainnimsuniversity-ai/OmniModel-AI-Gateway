@@ -5,19 +5,19 @@ Serves OpenAI-compatible proxy, multi-model arena, smart routing, and web dashbo
 
 import asyncio
 import json
+import mimetypes
 import os
 import re
 import shutil
 import socket
 import sys
 import time
+import traceback
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Body, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Add current directory to path
@@ -31,12 +31,39 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from core.config import GatewayConfig
-from core.providers import PROVIDERS_METADATA
-from core.adapters import UniversalAdapter
-from core.router import SmartRouter
-from core.analytics import AnalyticsTracker
-from core.screen_bridge import hardware_bridge
+_CORE_IMPORT_ERROR: Optional[str] = None
+try:
+    from core.config import GatewayConfig
+    from core.providers import PROVIDERS_METADATA
+    from core.adapters import UniversalAdapter
+    from core.router import SmartRouter
+    from core.analytics import AnalyticsTracker
+    from core.screen_bridge import hardware_bridge
+except Exception:
+    _CORE_IMPORT_ERROR = traceback.format_exc()
+    print(f"[server.py] Core import error:\n{_CORE_IMPORT_ERROR}", file=sys.stderr)
+    PROVIDERS_METADATA = {}
+
+    class GatewayConfig:  # type: ignore
+        PORT = int(os.getenv("PORT", "8000"))
+        HOST = os.getenv("HOST", "0.0.0.0")
+
+        @classmethod
+        def get_key(cls, k: str):
+            return os.getenv(k)
+
+        @classmethod
+        def set_key(cls, k: str, v: str):
+            return False
+
+        @classmethod
+        def get_active_providers_status(cls, d):
+            return {}
+
+    UniversalAdapter = None  # type: ignore
+    SmartRouter = None  # type: ignore
+    AnalyticsTracker = None  # type: ignore
+    hardware_bridge = None  # type: ignore
 
 try:
     import psutil
@@ -48,7 +75,12 @@ def _is_cloud_env() -> bool:
     return bool(
         os.getenv("VERCEL")
         or os.getenv("VERCEL_ENV")
+        or os.getenv("VERCEL_URL")
+        or os.getenv("VERCEL_REGION")
+        or os.getenv("VERCEL_DEPLOYMENT_ID")
         or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("AWS_EXECUTION_ENV")
+        or os.getenv("LAMBDA_TASK_ROOT")
         or os.getenv("RENDER")
         or os.getenv("DYNO")
         or os.getenv("RAILWAY_ENVIRONMENT")
@@ -80,13 +112,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files safely (only if directory exists)
+
+@app.on_event("startup")
+async def _startup_hardware_bridge():
+    if not _is_cloud_env() and hardware_bridge is not None:
+        hardware_bridge.start_background_tasks()
+
+
 PUBLIC_DIR = BASE_DIR / "public"
-if PUBLIC_DIR.exists() and PUBLIC_DIR.is_dir():
+
+
+@app.get("/static/{file_path:path}")
+async def serve_static_asset(file_path: str):
+    from fastapi.responses import FileResponse
+
+    base = PUBLIC_DIR.resolve()
+    target = (base / file_path).resolve()
     try:
-        app.mount("/static", StaticFiles(directory=str(PUBLIC_DIR)), name="static")
-    except Exception as e:
-        print(f"Warning: could not mount static files: {e}")
+        target.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    media_type, _ = mimetypes.guess_type(str(target))
+    return FileResponse(str(target), media_type=media_type or "application/octet-stream")
 
 
 @app.get("/style.css")
@@ -565,11 +614,24 @@ async def ping_provider(provider_id: str):
 @app.get("/api/health")
 @app.get("/health")
 async def health_check():
+    if _CORE_IMPORT_ERROR is not None:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "service": "OmniModel AI Gateway",
+                "version": "2.0.0",
+                "cloud_mode": _is_cloud_env(),
+                "core_loaded": False,
+                "core_error": _CORE_IMPORT_ERROR,
+            },
+        )
     return {
         "status": "ok",
         "service": "OmniModel AI Gateway",
         "version": "2.0.0",
-        "cloud_mode": _is_cloud_env()
+        "cloud_mode": _is_cloud_env(),
+        "core_loaded": True,
     }
 
 
@@ -1294,8 +1356,12 @@ async def system_resources_endpoint():
 
 
 def main():
+    import uvicorn
+
     port = GatewayConfig.PORT
     host = GatewayConfig.HOST
+    if not _is_cloud_env() and hardware_bridge is not None:
+        hardware_bridge.start_background_tasks()
     print("==================================================================")
     print(f"🚀 OmniModel Universal AI Gateway starting on http://{host}:{port}")
     print(f"📡 OpenAI Proxy endpoint ready at http://{host}:{port}/v1/chat/completions")

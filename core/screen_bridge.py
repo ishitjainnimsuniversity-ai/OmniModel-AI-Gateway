@@ -21,7 +21,12 @@ except ImportError:
 IS_CLOUD_RUNTIME = bool(
     os.getenv("VERCEL")
     or os.getenv("VERCEL_ENV")
+    or os.getenv("VERCEL_URL")
+    or os.getenv("VERCEL_REGION")
+    or os.getenv("VERCEL_DEPLOYMENT_ID")
     or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+    or os.getenv("AWS_EXECUTION_ENV")
+    or os.getenv("LAMBDA_TASK_ROOT")
     or os.getenv("RENDER")
     or os.getenv("DYNO")
     or os.getenv("RAILWAY_ENVIRONMENT")
@@ -37,6 +42,7 @@ class HardwareScreenBridge:
         self._last_sent_state = ""
         self._last_sent_time = 0.0
         self.cloud_mode = IS_CLOUD_RUNTIME
+        self._workers_started = False
 
         # Global Feed Cache for Worldwide Polling
         self.latest_feed = {
@@ -54,11 +60,14 @@ class HardwareScreenBridge:
         self._wifi_ok = False
         self._last_scan_time = 0.0
 
-        # Skip USB serial & LAN scanner background threads inside serverless/cloud containers
-        if not self.cloud_mode:
-            self._connect_usb()
-            self._start_usb_reader()
-            self._start_wifi_monitor()
+    def start_background_tasks(self):
+        """Starts local USB serial and Wi-Fi LAN monitor threads (skipped in cloud)."""
+        if self.cloud_mode or self._workers_started:
+            return
+        self._workers_started = True
+        self._connect_usb()
+        self._start_usb_reader()
+        self._start_wifi_monitor()
 
     def _connect_usb(self):
         if serial is None or self.cloud_mode:

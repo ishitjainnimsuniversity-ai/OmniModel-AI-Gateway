@@ -17,7 +17,12 @@ def _is_cloud_env() -> bool:
     return bool(
         os.getenv("VERCEL")
         or os.getenv("VERCEL_ENV")
+        or os.getenv("VERCEL_URL")
+        or os.getenv("VERCEL_REGION")
+        or os.getenv("VERCEL_DEPLOYMENT_ID")
         or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+        or os.getenv("AWS_EXECUTION_ENV")
+        or os.getenv("LAMBDA_TASK_ROOT")
         or os.getenv("RENDER")
         or os.getenv("DYNO")
         or os.getenv("RAILWAY_ENVIRONMENT")
