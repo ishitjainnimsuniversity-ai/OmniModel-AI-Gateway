@@ -112,11 +112,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.on_event("startup")
-async def _startup_hardware_bridge():
-    if not _is_cloud_env() and hardware_bridge is not None:
-        hardware_bridge.start_background_tasks()
+if not _is_cloud_env():
+    @app.on_event("startup")
+    async def _startup_hardware_bridge():
+        if hardware_bridge is not None:
+            hardware_bridge.start_background_tasks()
 
 
 PUBLIC_DIR = BASE_DIR / "public"

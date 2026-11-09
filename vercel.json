@@ -2,26 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/api/probe",
-      "destination": "/api/probe.py"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/gateway.py"
-    },
-    {
-      "source": "/v1/(.*)",
-      "destination": "/api/gateway.py"
-    },
-    {
-      "source": "/health",
-      "destination": "/api/gateway.py"
-    },
-    {
-      "source": "/ip",
-      "destination": "/api/gateway.py"
-    },
-    {
       "source": "/static/(.*)",
       "destination": "/$1"
     },
