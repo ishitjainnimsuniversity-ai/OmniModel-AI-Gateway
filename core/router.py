@@ -10,6 +10,7 @@ import operator
 import os
 import re
 import socket
+from concurrent.futures import ThreadPoolExecutor, wait as cf_wait
 import urllib.parse
 import httpx
 from typing import Dict, Any, List, Optional, Tuple, AsyncGenerator
@@ -426,14 +427,11 @@ class SmartRouter:
         clean = clean.strip(" ?!.,:") or p
 
         headers = {"User-Agent": "OmniModelGateway/5.0 (https://github.com/ishitjainnimsuniversity-ai/OmniModel-AI-Gateway)"}
-        wiki_extract = ""
-        wiki_title = ""
-        wiki_url = ""
-        ddg_facts: List[str] = []
+        req_timeout = httpx.Timeout(3.5, connect=2.0)
 
-        try:
-            with httpx.Client(timeout=5.5, headers=headers, follow_redirects=True) as client:
-                try:
+        def _fetch_wiki_search() -> Tuple[str, str, str]:
+            try:
+                with httpx.Client(timeout=req_timeout, headers=headers, follow_redirects=True) as client:
                     rw = client.get(
                         "https://en.wikipedia.org/w/api.php",
                         params={"action": "query", "list": "search", "srsearch": clean, "srinfo": "suggestion", "srlimit": 2, "format": "json"},
@@ -450,29 +448,85 @@ class SmartRouter:
                             if rw2.status_code == 200:
                                 hits = rw2.json().get("query", {}).get("search") or []
                         if hits:
-                            wiki_title = hits[0].get("title", "")
-                            rs = client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(wiki_title.replace(' ', '_'))}")
+                            wtitle = hits[0].get("title", "")
+                            rs = client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(wtitle.replace(' ', '_'))}")
                             if rs.status_code == 200:
                                 dsum = rs.json()
-                                wiki_extract = (dsum.get("extract") or "").strip()
-                                wiki_url = dsum.get("content_urls", {}).get("desktop", {}).get("page", "")
-                except Exception:
-                    pass
+                                ext = (dsum.get("extract") or "").strip()
+                                url = dsum.get("content_urls", {}).get("desktop", {}).get("page", "")
+                                if ext:
+                                    return wtitle, ext, url
+            except Exception:
+                pass
+            return "", "", ""
 
-                try:
+        def _fetch_wiki_direct_summary() -> Tuple[str, str, str]:
+            # Direct REST v1 summary is fast (often <0.8s even if Action Search API stalls)
+            candidates = []
+            c_norm = re.sub(r"\s+", " ", clean).strip()
+            if c_norm:
+                candidates.append(c_norm[0].upper() + c_norm[1:])
+                if c_norm.title() != candidates[0]:
+                    candidates.append(c_norm.title())
+            try:
+                with httpx.Client(timeout=req_timeout, headers=headers, follow_redirects=True) as client:
+                    for cand in candidates[:2]:
+                        rs = client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(cand.replace(' ', '_'))}")
+                        if rs.status_code == 200:
+                            dsum = rs.json()
+                            if dsum.get("type") == "disambiguation":
+                                continue
+                            ext = (dsum.get("extract") or "").strip()
+                            url = dsum.get("content_urls", {}).get("desktop", {}).get("page", "")
+                            if ext:
+                                return dsum.get("title") or cand, ext, url
+            except Exception:
+                pass
+            return "", "", ""
+
+        def _fetch_ddg() -> List[str]:
+            facts: List[str] = []
+            try:
+                with httpx.Client(timeout=req_timeout, headers=headers, follow_redirects=True) as client:
                     rd = client.get("https://api.duckduckgo.com/", params={"q": clean, "format": "json", "no_html": 1, "skip_disambig": 1})
                     if rd.status_code == 200:
                         dd = rd.json()
                         inst = (dd.get("Answer") or dd.get("AbstractText") or dd.get("Definition") or "").strip()
-                        if inst and inst not in wiki_extract:
-                            ddg_facts.append(inst)
+                        if inst:
+                            facts.append(inst)
                         for rel in (dd.get("RelatedTopics") or [])[:2]:
                             if isinstance(rel, dict) and rel.get("Text"):
-                                ddg_facts.append(rel["Text"][:220])
+                                facts.append(rel["Text"][:220])
+            except Exception:
+                pass
+            return facts
+
+        wiki_title, wiki_extract, wiki_url = "", "", ""
+        ddg_facts: List[str] = []
+        pool = ThreadPoolExecutor(max_workers=3)
+        try:
+            f_search = pool.submit(_fetch_wiki_search)
+            f_direct = pool.submit(_fetch_wiki_direct_summary)
+            f_ddg = pool.submit(_fetch_ddg)
+
+            done_futs, _ = cf_wait([f_search, f_direct, f_ddg], timeout=4.5)
+
+            for fut in (f_search, f_direct):
+                if fut in done_futs:
+                    try:
+                        wt, we, wu = fut.result()
+                        if we and (fut is f_search or not wiki_extract):
+                            wiki_title, wiki_extract, wiki_url = wt, we, wu
+                    except Exception:
+                        pass
+            if f_ddg in done_futs:
+                try:
+                    raw_facts = f_ddg.result()
+                    ddg_facts = [f for f in raw_facts if f and f not in wiki_extract]
                 except Exception:
                     pass
-        except Exception:
-            pass
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
         parts: List[str] = []
         if wiki_extract:
@@ -495,9 +549,9 @@ class SmartRouter:
         if not _is_cloud_env():
             try:
                 r = httpx.post(
-                    "http://localhost:11434/v1/chat/completions",
+                    "http://127.0.0.1:11434/v1/chat/completions",
                     json={"model": "llama3.2:1b", "messages": [{"role": "user", "content": prompt}]},
-                    timeout=10.0
+                    timeout=httpx.Timeout(8.0, connect=0.6)
                 )
                 if r.status_code == 200:
                     ans = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()

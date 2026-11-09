@@ -11,6 +11,7 @@ import base64
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import html as html_lib
+import importlib
 from io import BytesIO
 import json
 import os
@@ -66,12 +67,33 @@ IS_STREAMLIT_CLOUD = bool(
 if IS_STREAMLIT_CLOUD:
     os.environ["GENESIS_CLOUD_MODE"] = "1"
 
-from core.config import GatewayConfig  # noqa: E402
-from core.providers import PROVIDERS_METADATA  # noqa: E402
-from core.adapters import UniversalAdapter  # noqa: E402
-from core.router import SmartRouter  # noqa: E402
+import core.config as _core_config  # noqa: E402
+import core.providers as _core_providers  # noqa: E402
+import core.adapters as _core_adapters  # noqa: E402
+import core.router as _core_router  # noqa: E402
 from core.analytics import AnalyticsTracker  # noqa: E402
 from core.screen_bridge import hardware_bridge  # noqa: E402
+
+# Ensure soft-pulls on Streamlit Cloud reload updated core modules in long-lived worker processes
+_CORE_MTIMES = tuple(
+    (BASE_DIR / "core" / fname).stat().st_mtime
+    for fname in ("config.py", "providers.py", "adapters.py", "router.py")
+)
+if (
+    getattr(sys, "_genesis_core_mtimes", None) != _CORE_MTIMES
+    or not hasattr(_core_router.SmartRouter, "generate_uninterrupted_fallback_meta")
+):
+    if getattr(sys, "_genesis_core_mtimes", None) is not None or not hasattr(_core_router.SmartRouter, "generate_uninterrupted_fallback_meta"):
+        _core_config = importlib.reload(_core_config)
+        _core_providers = importlib.reload(_core_providers)
+        _core_adapters = importlib.reload(_core_adapters)
+        _core_router = importlib.reload(_core_router)
+    sys._genesis_core_mtimes = _CORE_MTIMES  # type: ignore[attr-defined]
+
+GatewayConfig = _core_config.GatewayConfig
+PROVIDERS_METADATA = _core_providers.PROVIDERS_METADATA
+UniversalAdapter = _core_adapters.UniversalAdapter
+SmartRouter = _core_router.SmartRouter
 
 
 # ---------------------------------------------------------------------------
@@ -1362,23 +1384,21 @@ def render_chat_workspace() -> None:
                 if msg.get("meta"):
                     st.caption(msg["meta"])
                 if msg["role"] == "assistant":
-                    b1, _ = st.columns([0.28, 0.72])
-                    with b1:
-                        if st.button("📟 Present on 2.4\" Screen", key=f"push_msg_{idx}"):
-                            dispatch_screen_command(
-                                {
-                                    "action": "feed",
-                                    "state": "ANSWERED",
-                                    "question": msg.get("question", current_chat["title"]),
-                                    "text": msg["content"],
-                                    "provider": msg.get("provider", "Gemini"),
-                                    "model": msg.get("model", "GENESIS AI 5.0"),
-                                },
-                                force=True,
-                            )
-                            if tft_slot is not None:
-                                _render_hardware_dock_content(tft_slot)
-                            st.toast("Presented on 2.4\" Screen!", icon="⚡")
+                    if st.button("📟 Present on 2.4\" Screen", key=f"push_msg_{idx}"):
+                        dispatch_screen_command(
+                            {
+                                "action": "feed",
+                                "state": "ANSWERED",
+                                "question": msg.get("question", current_chat["title"]),
+                                "text": msg["content"],
+                                "provider": msg.get("provider", "Gemini"),
+                                "model": msg.get("model", "GENESIS AI 5.0"),
+                            },
+                            force=True,
+                        )
+                        if tft_slot is not None:
+                            _render_hardware_dock_content(tft_slot)
+                        st.toast("Presented on 2.4\" Screen!", icon="⚡")
                 elif idx == len(msgs_list) - 1:
                     if st.button("🔄 Answer This Prompt Now", key=f"retry_orphan_{idx}"):
                         recovered = msgs_list.pop()["content"]
@@ -1532,6 +1552,15 @@ def render_chat_workspace() -> None:
                         }
 
                 raw_out = res["text"]
+                if not raw_out or raw_out.startswith("GENESIS AI: Processed request for"):
+                    fb_txt, fb_prov, fb_mod = SmartRouter.generate_uninterrupted_fallback_meta(
+                        user_prompt, skip_pollinations=True
+                    )
+                    raw_out = fb_txt
+                    res["provider"] = fb_prov
+                    res["model"] = fb_mod
+                    res["tokens"] = max(1, len(fb_txt) // 4)
+                    res["tok_s"] = round(res["tokens"] / max(0.15, res["latency_ms"] / 1000.0), 1)
                 thought_match = re.search(r"<thought>([\s\S]*?)</thought>", raw_out, flags=re.IGNORECASE)
                 thought_txt = thought_match.group(1).strip() if thought_match else ""
                 final_text = re.sub(r"<thought>[\s\S]*?</thought>", "", raw_out, flags=re.IGNORECASE).strip()

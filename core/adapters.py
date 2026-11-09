@@ -280,7 +280,7 @@ class UniversalAdapter:
                         "temperature": temperature,
                         "stream": False
                     }
-                    response = await client.post(target_url, headers=headers, json=payload, timeout=7.5)
+                    response = await client.post(target_url, headers=headers, json=payload, timeout=httpx.Timeout(6.0, connect=3.0))
                     latency = round((time.perf_counter() - start_time) * 1000, 2)
                     full_text = ""
                     rate_limited = response.status_code in (402, 429, 502, 503)
@@ -296,7 +296,7 @@ class UniversalAdapter:
                     if not full_text and not rate_limited:
                         import urllib.parse
                         last_q = clean_msgs[-1].get("content", "Hello") if clean_msgs else "Hello"
-                        r_get = await client.get(f"https://text.pollinations.ai/{urllib.parse.quote(last_q[:400])}", timeout=5.5)
+                        r_get = await client.get(f"https://text.pollinations.ai/{urllib.parse.quote(last_q[:400])}", timeout=httpx.Timeout(4.5, connect=2.5))
                         if r_get.status_code == 200:
                             cand = r_get.text.strip()
                             if cand and "Free limit reached" not in cand and "enter.pollinations.ai" not in cand:
