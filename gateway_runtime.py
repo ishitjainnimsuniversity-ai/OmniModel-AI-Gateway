@@ -112,11 +112,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _private_network_access_middleware(request: Request, call_next):
+    """Allow public HTTPS dashboards (e.g. *.streamlit.app) to reach local http://127.0.0.1:8000 in Chrome/Edge."""
+    if request.method == "OPTIONS" and request.headers.get("access-control-request-private-network"):
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+                "Access-Control-Allow-Private-Network": "true",
+                "Access-Control-Allow-Credentials": "true",
+            },
+        )
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
 if not _is_cloud_env():
     @app.on_event("startup")
     async def _startup_hardware_bridge():
         if hardware_bridge is not None:
             hardware_bridge.start_background_tasks()
+            if os.getenv("DISABLE_CLOUD_SCREEN_SYNC") != "1":
+                hardware_bridge.start_cloud_poller()
 
 
 PUBLIC_DIR = BASE_DIR / "public"
@@ -1253,6 +1274,10 @@ async def push_screen_endpoint(request: Request, q: Optional[str] = None, text: 
     cur_model = body.get("model") or model
     cur_prov = body.get("provider") or provider
 
+    if isinstance(body, dict) and body.get("action") in ("rgb", "page", "clear", "tft_image"):
+        res = hardware_bridge.execute_command(body)
+        return {"status": "ok", "screen_synced": True, **res}
+
     try:
         if cur_state == "THINKING":
             hardware_bridge.send_thinking(question, cur_prov, cur_model)
@@ -1279,15 +1304,58 @@ async def screen_poll_endpoint(v: int = 0):
     }
 
 
+@app.post("/api/screen/command")
+async def screen_command_endpoint(request: Request):
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            return {"status": "error", "detail": "Invalid JSON body"}
+        res = hardware_bridge.execute_command(body)
+        return {"status": "ok", **res}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@app.get("/api/screen/rgb")
+@app.post("/api/screen/rgb")
+async def screen_rgb_endpoint(request: Request, brightness: Optional[int] = None):
+    if request.method == "GET":
+        return {"status": "ok", "brightness": hardware_bridge._rgb_brightness, "esp": hardware_bridge.query_esp32_status()}
+    b = brightness
+    target_ip = ""
+    if b is None:
+        try:
+            body = await request.json()
+            b = int(body.get("brightness", 45))
+            target_ip = body.get("target_ip", "")
+        except Exception:
+            b = 45
+    return hardware_bridge.set_rgb_brightness(b, target_ip=target_ip)
+
+
+@app.post("/api/screen/page")
+async def screen_page_endpoint():
+    return hardware_bridge.send_page()
+
+
+@app.post("/api/screen/clear")
+async def screen_clear_endpoint():
+    return hardware_bridge.send_clear()
+
+
+@app.get("/api/screen/esp_status")
+async def screen_esp_status_endpoint(ip: Optional[str] = None):
+    return hardware_bridge.query_esp32_status(target_ip=ip or "")
+
+
 @app.post("/api/screen/register")
 async def screen_register_endpoint(request: Request):
     try:
         body = await request.json()
         ip = body.get("ip") or body.get("esp_ip")
         if ip:
-            hardware_bridge.esp_wifi_ip = ip
-            hardware_bridge._wifi_ok = True
-            return {"status": "ok", "registered_ip": ip}
+            reachable = hardware_bridge.set_target_ip(ip)
+            return {"status": "ok", "registered_ip": ip, "reachable": reachable}
     except Exception:
         pass
     return {"status": "error", "detail": "missing IP"}

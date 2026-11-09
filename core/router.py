@@ -26,6 +26,9 @@ def _is_cloud_env() -> bool:
         or os.getenv("RENDER")
         or os.getenv("DYNO")
         or os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("STREAMLIT_SHARING_MODE")
+        or os.getenv("GENESIS_CLOUD_MODE") == "1"
+        or os.path.exists("/mount/src")
     )
 
 
@@ -158,11 +161,12 @@ class SmartRouter:
     @classmethod
     async def route_and_execute_stream(
         cls,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         profile_override: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = 2048,
-        api_key_override: Optional[str] = None
+        api_key_override: Optional[str] = None,
+        session_keys: Optional[Dict[str, str]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Executes smart routing with automatic multi-provider fallback waterfall.
@@ -234,7 +238,8 @@ class SmartRouter:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    api_key_override=api_key_override
+                    api_key_override=api_key_override,
+                    session_keys=session_keys
                 ):
                     if chunk.get("error") or chunk.get("status") == "missing_key":
                         had_error = True

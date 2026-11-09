@@ -71,10 +71,11 @@ class UniversalAdapter:
         cls,
         provider_id: str,
         model: str,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         temperature: float = 0.7,
         max_tokens: Optional[int] = 2048,
-        api_key_override: Optional[str] = None
+        api_key_override: Optional[str] = None,
+        session_keys: Optional[Dict[str, str]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Yields normalized streaming SSE chunks:
@@ -87,15 +88,20 @@ class UniversalAdapter:
             return
 
         env_var = meta.get("env_var")
-        api_key = api_key_override or (GatewayConfig.get_key(env_var) if env_var else None)
+        s_keys = session_keys or {}
+        api_key = (
+            api_key_override
+            or (s_keys.get(env_var) if env_var else None)
+            or (GatewayConfig.get_key(env_var) if env_var else None)
+        )
 
         if provider_id == "openrouter" and (not model or model.endswith(":free")):
             model = "openrouter/free"
 
-        # If a specific provider's key is not set in .env, seamlessly bridge through the active OPENROUTER_API_KEY or GEMINI_API_KEY
+        # If a specific provider's key is not set in .env, seamlessly bridge through active OPENROUTER_API_KEY or GEMINI_API_KEY
         if provider_id not in ("ollama", "pollinations") and not api_key:
-            or_key = GatewayConfig.get_key("OPENROUTER_API_KEY")
-            gem_key = GatewayConfig.get_key("GEMINI_API_KEY")
+            or_key = s_keys.get("OPENROUTER_API_KEY") or GatewayConfig.get_key("OPENROUTER_API_KEY")
+            gem_key = s_keys.get("GEMINI_API_KEY") or GatewayConfig.get_key("GEMINI_API_KEY")
             if or_key:
                 provider_id = "openrouter"
                 meta = PROVIDERS_METADATA["openrouter"]
@@ -123,7 +129,7 @@ class UniversalAdapter:
         async with httpx.AsyncClient(timeout=25.0, verify=False) as client:
             try:
                 if format_type == "gemini":
-                    # Convert to Gemini format
+                    # Convert to Gemini format (with optional Vision inlineData support)
                     gemini_contents = []
                     system_instruction = None
                     for m in messages:
@@ -133,7 +139,13 @@ class UniversalAdapter:
                             system_instruction = {"parts": [{"text": content}]}
                         else:
                             gem_role = "user" if role == "user" else "model"
-                            gemini_contents.append({"role": gem_role, "parts": [{"text": content}]})
+                            parts: List[Dict[str, Any]] = [{"text": content}]
+                            for img in (m.get("images") or []):
+                                b64_data = img.get("data", "")
+                                mime = img.get("mime_type", "image/jpeg")
+                                if b64_data:
+                                    parts.append({"inlineData": {"mimeType": mime, "data": b64_data}})
+                            gemini_contents.append({"role": gem_role, "parts": parts})
 
                     payload = {
                         "contents": gemini_contents,
@@ -308,11 +320,24 @@ class UniversalAdapter:
                         yield {"delta": "Pollinations unavailable", "done": True, "error": True, "provider": "pollinations", "model": model}
 
                 else:
-                    # Standard OpenAI Compatible streaming or non-streaming
+                    # Standard OpenAI Compatible streaming or non-streaming (supports optional images)
+                    formatted_messages: List[Dict[str, Any]] = []
+                    for m in messages:
+                        imgs = m.get("images") or []
+                        if imgs:
+                            c_parts: List[Dict[str, Any]] = [{"type": "text", "text": m.get("content", "")}]
+                            for img in imgs:
+                                b64_data = img.get("data", "")
+                                mime = img.get("mime_type", "image/jpeg")
+                                if b64_data:
+                                    c_parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64_data}"}})
+                            formatted_messages.append({"role": m.get("role", "user"), "content": c_parts})
+                        else:
+                            formatted_messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
 
                     payload = {
                         "model": model,
-                        "messages": messages,
+                        "messages": formatted_messages,
                         "temperature": temperature,
                         "stream": True
                     }
@@ -395,7 +420,7 @@ class UniversalAdapter:
                 }
 
     @classmethod
-    async def test_ping(cls, provider_id: str) -> Dict[str, Any]:
+    async def test_ping(cls, provider_id: str, api_key_override: Optional[str] = None) -> Dict[str, Any]:
         """Pings provider endpoint to test authentication and latency"""
         start = time.perf_counter()
         meta = PROVIDERS_METADATA.get(provider_id)
@@ -403,7 +428,7 @@ class UniversalAdapter:
             return {"provider": provider_id, "status": "unknown", "latency_ms": 0, "message": "Unknown provider"}
 
         env_var = meta.get("env_var")
-        api_key = GatewayConfig.get_key(env_var) if env_var else None
+        api_key = api_key_override or (GatewayConfig.get_key(env_var) if env_var else None)
 
         if provider_id == "ollama":
             # Test local ollama
@@ -448,7 +473,8 @@ class UniversalAdapter:
                 provider_id=provider_id,
                 model=model,
                 messages=[{"role": "user", "content": "Reply with 'OK'."}],
-                max_tokens=10
+                max_tokens=10,
+                api_key_override=api_key_override
             ):
                 if chunk.get("error"):
                     return {

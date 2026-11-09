@@ -35,3 +35,7 @@ docker-compose.yml
 render.yaml
 Procfile
 test_*.py
+streamlit_app.py
+.streamlit/
+requirements-streamlit.txt
+cloud_to_esp32_sync.py
