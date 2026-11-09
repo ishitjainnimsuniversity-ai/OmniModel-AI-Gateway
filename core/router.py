@@ -427,23 +427,41 @@ class SmartRouter:
         clean = clean.strip(" ?!.,:") or p
 
         headers = {"User-Agent": "OmniModelGateway/5.0 (https://github.com/ishitjainnimsuniversity-ai/OmniModel-AI-Gateway)"}
-        req_timeout = httpx.Timeout(3.5, connect=2.0)
+        req_timeout = httpx.Timeout(5.0, connect=2.5)
 
         def _fetch_wiki_search() -> Tuple[str, str, str]:
             try:
                 with httpx.Client(timeout=req_timeout, headers=headers, follow_redirects=True) as client:
                     rw = client.get(
                         "https://en.wikipedia.org/w/api.php",
-                        params={"action": "query", "list": "search", "srsearch": clean, "srinfo": "suggestion", "srlimit": 2, "format": "json"},
+                        params={
+                            "action": "query",
+                            "list": "search",
+                            "srsearch": clean,
+                            "srinfo": "suggestion",
+                            "srprop": "snippet",
+                            "srlimit": 2,
+                            "format": "json",
+                        },
                     )
                     if rw.status_code == 200:
                         qobj = rw.json().get("query", {})
                         hits = qobj.get("search") or []
                         sug = (qobj.get("searchinfo") or {}).get("suggestion")
                         if not hits and sug:
+                            cand_sug = sug[0].upper() + sug[1:]
+                            rs_sug = client.get(
+                                f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(cand_sug.replace(' ', '_'))}"
+                            )
+                            if rs_sug.status_code == 200:
+                                dsum = rs_sug.json()
+                                ext = (dsum.get("extract") or "").strip()
+                                url = dsum.get("content_urls", {}).get("desktop", {}).get("page", "")
+                                if ext and dsum.get("type") != "disambiguation":
+                                    return dsum.get("title") or cand_sug, ext, url
                             rw2 = client.get(
                                 "https://en.wikipedia.org/w/api.php",
-                                params={"action": "query", "list": "search", "srsearch": sug, "srlimit": 2, "format": "json"},
+                                params={"action": "query", "list": "search", "srsearch": sug, "srprop": "snippet", "srlimit": 2, "format": "json"},
                             )
                             if rw2.status_code == 200:
                                 hits = rw2.json().get("query", {}).get("search") or []
@@ -456,6 +474,9 @@ class SmartRouter:
                                 url = dsum.get("content_urls", {}).get("desktop", {}).get("page", "")
                                 if ext:
                                     return wtitle, ext, url
+                            snip = re.sub(r"<[^>]+>", "", hits[0].get("snippet") or "").strip()
+                            if snip:
+                                return wtitle, snip, f"https://en.wikipedia.org/wiki/{urllib.parse.quote(wtitle.replace(' ', '_'))}"
             except Exception:
                 pass
             return "", "", ""
@@ -509,7 +530,7 @@ class SmartRouter:
             f_direct = pool.submit(_fetch_wiki_direct_summary)
             f_ddg = pool.submit(_fetch_ddg)
 
-            done_futs, _ = cf_wait([f_search, f_direct, f_ddg], timeout=4.5)
+            done_futs, _ = cf_wait([f_search, f_direct, f_ddg], timeout=6.5)
 
             for fut in (f_search, f_direct):
                 if fut in done_futs:

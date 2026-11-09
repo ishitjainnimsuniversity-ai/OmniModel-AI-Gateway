@@ -159,6 +159,7 @@ def get_shared_screen_state() -> Dict[str, Any]:
         "last_image_url": "",
         "last_image_bytes": None,
         "last_image_prompt": "",
+        "page_idx": 0,
         "updated_at": time.strftime("%H:%M:%S"),
         "sync_log": [],
     }
@@ -322,6 +323,24 @@ div.stButton > button:hover {{
   animation: genesisChromaBar 5s ease infinite;
   margin-bottom: 8px;
 }}
+@media (min-width: 769px) {{
+  div[data-testid="stColumn"]:has(#genesis-tft-dock) {{
+    position: sticky;
+    top: 3.75rem;
+    align-self: flex-start;
+    z-index: 5;
+  }}
+}}
+div[data-testid="stElementContainer"]:has(iframe[srcdoc*="/api/screen/command"]) {{
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  pointer-events: none !important;
+}}
 </style>
 """,
     unsafe_allow_html=True,
@@ -365,6 +384,32 @@ def _has_any_api_key() -> bool:
     return False
 
 
+def _paginate_tft_text(text: str, page_size: int = 380) -> List[str]:
+    clean = (text or "").strip()
+    if not clean:
+        return ["Ready."]
+    if len(clean) <= page_size:
+        return [clean]
+    pages: List[str] = []
+    idx = 0
+    n = len(clean)
+    while idx < n:
+        end = min(n, idx + page_size)
+        if end < n:
+            split_nl = clean.rfind("\n", idx + page_size // 2, end)
+            split_sp = clean.rfind(" ", idx + page_size // 2, end)
+            cut = max(split_nl, split_sp)
+            if cut > idx:
+                end = cut
+        chunk = clean[idx:end].strip()
+        if chunk:
+            pages.append(chunk)
+        idx = end
+        while idx < n and clean[idx] in " \n\r\t":
+            idx += 1
+    return pages or [clean[:page_size]]
+
+
 def _build_tft_bezel_html(shared: Dict[str, Any], esp_ip: str, compact: bool = False) -> str:
     with shared["lock"]:
         cur_state = shared["state"]
@@ -375,6 +420,7 @@ def _build_tft_bezel_html(shared: Dict[str, Any], esp_ip: str, compact: bool = F
         cur_rgb = shared["rgb_brightness"]
         cur_fw = shared["fusion_watermark"]
         cur_img = shared.get("last_image_bytes")
+        cur_page_idx = int(shared.get("page_idx", 0))
 
     logo_b64 = _logo_b64()
     bg_watermark = (
@@ -394,7 +440,12 @@ def _build_tft_bezel_html(shared: Dict[str, Any], esp_ip: str, compact: bool = F
         )
 
     ans_limit = 380 if compact else 560
-    ans_display = cur_ans[:ans_limit] + ("..." if len(cur_ans) > ans_limit else "")
+    pages = _paginate_tft_text(cur_ans, ans_limit)
+    active_p = cur_page_idx % len(pages)
+    ans_display = pages[active_p]
+    if len(pages) > 1 and active_p < len(pages) - 1:
+        ans_display += " ..."
+    page_tag = f" • P{active_p + 1}/{len(pages)}" if len(pages) > 1 else ""
     safe_q_html = html_lib.escape(cur_q or "Awaiting input...").replace("\r", "").replace("\n", "<br/>")
     safe_ans_html = html_lib.escape(ans_display or "Ready.").replace("\r", "").replace("\n", "<br/>")
 
@@ -413,7 +464,7 @@ def _build_tft_bezel_html(shared: Dict[str, Any], esp_ip: str, compact: bool = F
         f'<div style="position:absolute;inset:0;background-position:center;background-size:{wm_sz} {wm_sz};background-repeat:no-repeat;pointer-events:none;{bg_watermark}"></div>',
         '<div style="background:#051c38;border-bottom:2px solid #22d3ee;padding:5px 9px;display:flex;justify-content:space-between;font-size:10px;color:#22d3ee;z-index:2;">',
         '<span>⚡ GENESIS AI 5.0</span>',
-        f'<span style="color:#34d399;">{html_lib.escape(str(cur_state))} • {html_lib.escape(str(cur_prov))}</span>',
+        f'<span style="color:#34d399;">{html_lib.escape(str(cur_state))} • {html_lib.escape(str(cur_prov))}{page_tag}</span>',
         '</div>',
         '<div style="padding:8px 10px;flex:1;z-index:2;overflow-y:auto;">',
         '<div style="color:#34d399;font-size:10px;font-weight:700;">▶ PROMPT:</div>',
@@ -512,17 +563,22 @@ def dispatch_screen_command(payload: Dict[str, Any], force: bool = False) -> Dic
                 shared["answer"] = "Querying GENESIS Neural Router..."
             shared["provider"] = payload.get("provider", shared["provider"])
             shared["model"] = payload.get("model", shared["model"])
+            shared["page_idx"] = 0
         elif action == "clear":
             shared["state"] = "READY"
             shared["question"] = "Awaiting input..."
             shared["answer"] = "Ready for query."
             shared["last_image_bytes"] = None
             shared["last_image_url"] = ""
+            shared["page_idx"] = 0
+        elif action == "page":
+            shared["page_idx"] = int(shared.get("page_idx", 0)) + 1
         elif action == "rgb":
             shared["rgb_brightness"] = int(payload.get("brightness", 45))
         elif action == "tft_image":
             shared["state"] = "IMAGE_VIEW"
             shared["question"] = payload.get("prompt", "AI Image Studio")
+            shared["page_idx"] = 0
 
         shared["sync_log"].insert(
             0,
@@ -580,20 +636,27 @@ def flush_browser_js_bridge() -> None:
   const espIp = {json.dumps(esp_ip)};
   const directLan = {json.dumps(direct_lan)};
 
-  for (const cmd of cmds) {{
+  async function postWithTimeout(url, bodyObj) {{
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 1400);
     try {{
-      await fetch(gw + '/api/screen/command', {{
+      await fetch(url, {{
         method: 'POST',
         headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify(cmd)
+        body: JSON.stringify(bodyObj),
+        signal: ctrl.signal
       }});
+    }} finally {{
+      clearTimeout(tid);
+    }}
+  }}
+
+  for (const cmd of cmds) {{
+    try {{
+      await postWithTimeout(gw + '/api/screen/command', cmd);
     }} catch (e) {{
       try {{
-        await fetch('http://localhost:8000/api/screen/command', {{
-          method: 'POST',
-          headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify(cmd)
-        }});
+        await postWithTimeout('http://localhost:8000/api/screen/command', cmd);
       }} catch (e2) {{}}
     }}
 
@@ -1328,6 +1391,7 @@ def render_chat_workspace() -> None:
     if st.session_state.present_screen_dock:
         col_chat, col_tft = st.columns([1.65, 1.05], gap="medium")
         with col_tft:
+            st.markdown('<div id="genesis-tft-dock"></div>', unsafe_allow_html=True)
             st.markdown("##### 📟 Live 2.4\" Screen Presenter")
             tft_slot = st.empty()
             _render_hardware_dock_content(tft_slot)
@@ -1335,6 +1399,7 @@ def render_chat_workspace() -> None:
             with d1:
                 if st.button("⏭ Page", key="dock_page_btn", width="stretch"):
                     dispatch_screen_command({"action": "page"}, force=True)
+                    _render_hardware_dock_content(tft_slot)
                     st.toast("Next 2.4\" TFT page triggered!", icon="📟")
             with d2:
                 if st.button("🧹 Clear", key="dock_clear_btn", width="stretch"):
@@ -1346,7 +1411,7 @@ def render_chat_workspace() -> None:
                     st.session_state.workspace = "📟 2.4\" Hardware Screen ⚡"
                     st.rerun()
             if IS_STREAMLIT_CLOUD:
-                st.caption(f"🔄 Browser Loopback → `127.0.0.1:8000` • ESP32 Target: `{st.session_state.esp_ip}`")
+                st.caption(f"☁️ Cloud Relay + Loopback (`127.0.0.1:8000`) → ESP32 `{st.session_state.esp_ip}`")
             else:
                 st.caption(f"🟢 Local Hardware Bridge → ESP32 `{st.session_state.esp_ip}` / `192.168.4.1` / `COM4`")
         chat_host = col_chat
@@ -2036,6 +2101,7 @@ def render_hardware_screen_workspace() -> None:
             if st.button("⏭ Page", width="stretch"):
                 dispatch_screen_command({"action": "page"}, force=True)
                 st.toast("Next TFT page triggered!")
+                st.rerun()
         with b2:
             if st.button("🧹 Clear", width="stretch"):
                 dispatch_screen_command({"action": "clear"}, force=True)
