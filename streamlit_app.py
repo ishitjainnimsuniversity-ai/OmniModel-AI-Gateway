@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 import html as html_lib
 from io import BytesIO
 import json
@@ -220,6 +220,8 @@ def init_session_state() -> None:
         st.session_state.pending_starter_prompt = None
     if "direct_browser_esp" not in st.session_state:
         st.session_state.direct_browser_esp = False
+    if "present_screen_dock" not in st.session_state:
+        st.session_state.present_screen_dock = True
 
 
 init_session_state()
@@ -285,6 +287,19 @@ div.stButton > button:hover {{
   border-color: {ACCENT};
   box-shadow: 0 0 12px {GLOW};
 }}
+@keyframes genesisChromaBar {{
+  0%   {{ background-position: 0% 50%; }}
+  50%  {{ background-position: 100% 50%; }}
+  100% {{ background-position: 0% 50%; }}
+}}
+.gen-chroma-bar {{
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff1e56, #006bff, #00e5ff, #00d878, #006bff);
+  background-size: 300% 100%;
+  animation: genesisChromaBar 5s ease infinite;
+  margin-bottom: 8px;
+}}
 </style>
 """,
     unsafe_allow_html=True,
@@ -316,6 +331,84 @@ def get_resolved_key(env_var: Optional[str]) -> Optional[str]:
     if sess_val:
         return sess_val
     return GatewayConfig.get_key(env_var)
+
+
+def _has_any_api_key() -> bool:
+    for pid, meta in PROVIDERS_METADATA.items():
+        if pid in ("ollama", "pollinations"):
+            continue
+        ev = meta.get("env_var")
+        if ev and get_resolved_key(ev):
+            return True
+    return False
+
+
+def _build_tft_bezel_html(shared: Dict[str, Any], esp_ip: str, compact: bool = False) -> str:
+    with shared["lock"]:
+        cur_state = shared["state"]
+        cur_q = shared["question"]
+        cur_ans = shared["answer"]
+        cur_prov = shared["provider"]
+        cur_mod = shared["model"]
+        cur_rgb = shared["rgb_brightness"]
+        cur_fw = shared["fusion_watermark"]
+        cur_img = shared.get("last_image_bytes")
+
+    logo_b64 = _logo_b64()
+    bg_watermark = (
+        f"background-image:url('data:image/png;base64,{logo_b64}');opacity:0.13;"
+        if (cur_fw and logo_b64)
+        else "opacity:0;"
+    )
+    img_preview_html = ""
+    if cur_state == "IMAGE_VIEW" and cur_img:
+        img_mime = "image/png" if cur_img[:4] == b"\x89PNG" else "image/jpeg"
+        img_b64 = base64.b64encode(cur_img).decode("ascii")
+        max_h = "110px" if compact else "135px"
+        img_preview_html = (
+            f'<div style="text-align:center;margin:6px 0;">'
+            f'<img src="data:{img_mime};base64,{img_b64}" style="max-height:{max_h};border:1px solid #00f0ff;border-radius:6px;">'
+            f'</div>'
+        )
+
+    ans_limit = 380 if compact else 560
+    ans_display = cur_ans[:ans_limit] + ("..." if len(cur_ans) > ans_limit else "")
+    safe_q_html = html_lib.escape(cur_q or "Awaiting input...").replace("\r", "").replace("\n", "<br/>")
+    safe_ans_html = html_lib.escape(ans_display or "Ready.").replace("\r", "").replace("\n", "<br/>")
+
+    pad_outer = "12px" if compact else "18px"
+    min_h = "230px" if compact else "270px"
+    wm_sz = "120px" if compact else "150px"
+
+    pcb_lines = [
+        f'<div style="background:linear-gradient(180deg,#5c0b0b,#3a0606);border:2px solid #b91c1c;border-radius:16px;padding:{pad_outer};box-shadow:0 0 28px rgba(239,68,68,0.24);">',
+        '<div style="display:flex;justify-content:space-between;font-family:monospace;font-size:10px;color:#fbbf24;margin-bottom:6px;">',
+        '<span>VCC GND CS RST DC MOSI SCK</span>',
+        '<span>2.4&quot; ILI9341 (320x240)</span>',
+        '</div>',
+        '<div class="gen-chroma-bar"></div>',
+        f'<div style="position:relative;background:#000;border:4px solid #111827;border-radius:8px;min-height:{min_h};display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;font-family:Consolas,monospace;">',
+        f'<div style="position:absolute;inset:0;background-position:center;background-size:{wm_sz} {wm_sz};background-repeat:no-repeat;pointer-events:none;{bg_watermark}"></div>',
+        '<div style="background:#051c38;border-bottom:2px solid #22d3ee;padding:5px 9px;display:flex;justify-content:space-between;font-size:10px;color:#22d3ee;z-index:2;">',
+        '<span>⚡ GENESIS AI 5.0</span>',
+        f'<span style="color:#34d399;">{html_lib.escape(str(cur_state))} • {html_lib.escape(str(cur_prov))}</span>',
+        '</div>',
+        '<div style="padding:8px 10px;flex:1;z-index:2;overflow-y:auto;">',
+        '<div style="color:#34d399;font-size:10px;font-weight:700;">▶ PROMPT:</div>',
+        f'<div style="color:#a5f3fc;font-size:11px;margin-bottom:6px;">{safe_q_html}</div>',
+        img_preview_html,
+        f'<div style="color:#fbbf24;font-size:10px;font-weight:700;">✦ GENESIS ANSWER ({html_lib.escape(str(cur_mod))}):</div>',
+        f'<div style="color:#f1f5f9;font-size:11px;line-height:1.42;border-left:2px solid #fbbf24;padding-left:8px;">{safe_ans_html}</div>',
+        '</div>',
+        '<div style="background:#0d1624;border-top:1px solid #334155;padding:4px 9px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;z-index:2;">',
+        f'<span>IP: {html_lib.escape(esp_ip)} • RGB GPIO27: {cur_rgb}%</span>',
+        '<span style="color:#22d3ee;">RISC-V 240MHz</span>',
+        '</div>',
+        '</div>',
+        '<div style="text-align:center;font-family:monospace;font-size:9px;color:#fbbf24;margin-top:6px;">ESP32-C5 Wi-Fi 6 • GENESIS PHOTON GPIO27 CHROMA • LIVE SYNC</div>',
+        '</div>',
+    ]
+    return "\n".join(p for p in pcb_lines if p)
 
 
 def encode_image_rgb565_chunks(image_bytes: bytes, aspect: str = "1:1") -> Tuple[int, int, int, int, List[Dict[str, Any]]]:
@@ -736,7 +829,7 @@ def record_telemetry(provider: str, model: str, latency_ms: float, tokens: int, 
     st.session_state.session_analytics.insert(
         0,
         {
-            "timestamp": datetime.utcnow().strftime("%H:%M:%S UTC"),
+            "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
             "endpoint": endpoint,
             "provider": provider,
             "model": model,
@@ -779,6 +872,7 @@ async def _collect_stream_async(
     used_provider = "pollinations" if IS_STREAMLIT_CLOUD else "smart-router"
     used_model = model_choice
     t0 = time.perf_counter()
+    last_q = messages[-1].get("content", "Hello") if messages else "Hello"
 
     if model_choice.startswith("profile:"):
         prof_key = model_choice.split(":", 1)[1]
@@ -816,14 +910,24 @@ async def _collect_stream_async(
                 used_provider = ev["provider"]
             if ev.get("model"):
                 used_model = ev["model"]
-        if had_err and chunks and "Missing API key" in "".join(chunks):
+        joined_err = "".join(chunks)
+        if had_err and (prov == "pollinations" or "Pollinations unavailable" in joined_err or not joined_err.strip()):
+            fb_text, fb_prov, fb_mod = await asyncio.to_thread(
+                SmartRouter.generate_uninterrupted_fallback_meta, last_q, prov == "pollinations"
+            )
+            chunks = [fb_text]
+            used_provider, used_model = fb_prov, fb_mod
+        elif had_err and chunks and "Missing API key" in joined_err:
             chunks.append(
-                "\n\n> 💡 *Tip:* Add your API key in **🌐 22 Providers Matrix**, or select **✨ GENESIS 5.0 Auto-Router** / **Pollinations Free** for keyless inference."
+                "\n\n> 💡 *Tip:* Add your API key in **🌐 22 Providers Matrix**, or select **✨ GENESIS 5.0 Auto-Router** above for automatic keyless answers."
             )
 
     full_text = "".join(chunks).strip()
     if not full_text:
-        full_text = SmartRouter.generate_uninterrupted_fallback(messages[-1].get("content", "Hello"))
+        full_text, fb_prov, fb_mod = await asyncio.to_thread(
+            SmartRouter.generate_uninterrupted_fallback_meta, last_q, True
+        )
+        used_provider, used_model = fb_prov, fb_mod
 
     latency_ms = round((time.perf_counter() - t0) * 1000, 1)
     tokens_est = max(1, len(full_text) // 4)
@@ -998,28 +1102,38 @@ def render_sidebar() -> None:
 def render_top_hud() -> None:
     total_models = sum(len(v.get("models", [])) for v in PROVIDERS_METADATA.values())
     env_label = "CLOUD STREAMLIT GATEWAY" if IS_STREAMLIT_CLOUD else "LOCAL DUAL-BRAIN GATEWAY"
-    st.markdown(
-        f"""
-        <div class="gen-hero">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-            <div>
-              <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.04em;">
-                ⚡ GENESIS AI 5.0 <span style="color:{ACCENT};font-size:14px;">// {env_label}</span>
-              </div>
-              <div style="font-size:12px;color:#94a3b8;">
-                Smart Intent Router • Live Search & Swarm • Image Studio RGB565 • ESP32-C5 2.4" TFT Bridge
-              </div>
-            </div>
-            <div class="gen-pill-row">
-              <span class="gen-badge">{len(PROVIDERS_METADATA)} Providers / {total_models} Models</span>
-              <span class="gen-badge">Velocity: {st.session_state.last_tok_speed} tok/s</span>
-              <span class="gen-badge">Screen Sync: {'ON' if st.session_state.mirror_screen else 'OFF'}</span>
-            </div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    keyless_cloud = IS_STREAMLIT_CLOUD and not _has_any_api_key()
+    cloud_mode_badge = (
+        '<span class="gen-badge" style="border-color:#f59e0b;color:#fcd34d;">Keyless Mode: Pollinations + Wiki/DDG</span>'
+        if keyless_cloud
+        else ""
     )
+    keyless_tip_html = (
+        '<div style="margin-top:8px;font-size:11px;color:#cbd5e1;border-top:1px solid rgba(56,189,248,0.16);padding-top:6px;">'
+        '🔑 <b>Tip:</b> Running keyless (Pollinations 45s cooldown + Live Knowledge Engine). '
+        'Add a free <code>GEMINI_API_KEY</code> or <code>GROQ_API_KEY</code> in <b>🌐 22 Providers Matrix</b> or Streamlit <b>Secrets</b> for unlimited LLM chat.'
+        '</div>'
+        if keyless_cloud
+        else ""
+    )
+    hero_lines = [
+        '<div class="gen-hero">',
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">',
+        '<div>',
+        f'<div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.04em;">⚡ GENESIS AI 5.0 <span style="color:{ACCENT};font-size:14px;">// {env_label}</span></div>',
+        '<div style="font-size:12px;color:#94a3b8;">Smart Intent Router • Live Search & Swarm • Image Studio RGB565 • ESP32-C5 2.4&quot; TFT Bridge</div>',
+        '</div>',
+        '<div class="gen-pill-row">',
+        f'<span class="gen-badge">{len(PROVIDERS_METADATA)} Providers / {total_models} Models</span>',
+        f'<span class="gen-badge">Velocity: {st.session_state.last_tok_speed} tok/s</span>',
+        f'<span class="gen-badge">Screen Sync: {"ON" if st.session_state.mirror_screen else "OFF"}</span>',
+        cloud_mode_badge,
+        '</div>',
+        '</div>',
+        keyless_tip_html,
+        '</div>',
+    ]
+    st.markdown("\n".join(line for line in hero_lines if line), unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1114,11 +1228,19 @@ def _render_system_action_card(action: Dict[str, Any], prompt: str) -> Tuple[str
     return extra_summary, gen_img_bytes
 
 
+def _render_hardware_dock_content(tft_slot) -> None:
+    shared = get_shared_screen_state()
+    tft_slot.markdown(
+        _build_tft_bezel_html(shared, st.session_state.esp_ip, compact=True),
+        unsafe_allow_html=True,
+    )
+
+
 def render_chat_workspace() -> None:
     current_chat = st.session_state.chats[st.session_state.current_chat_id]
     model_options, model_labels = _build_model_options()
 
-    c_top1, c_top2, c_top3, c_top4, c_top5 = st.columns([2.6, 1, 1, 1, 1])
+    c_top1, c_top2, c_top3, c_top4, c_top5, c_top6 = st.columns([2.35, 0.9, 0.9, 0.9, 0.9, 1.05])
     with c_top1:
         selected_model = st.selectbox(
             "Active Model / Router",
@@ -1134,6 +1256,12 @@ def render_chat_workspace() -> None:
         use_swarm = st.toggle("🤖 Swarm", value=False)
     with c_top5:
         use_image = st.toggle("🎨 Image", value=False)
+    with c_top6:
+        st.session_state.present_screen_dock = st.toggle(
+            "📟 2.4\" Dock",
+            value=st.session_state.present_screen_dock,
+            help="Show or hide the Live 2.4-inch Hardware Screen Presenter next to chat",
+        )
 
     with st.expander("📎 Attach Image / Document (Vision & Context)  &  🎤 Voice Assistant"):
         up_col, voice_col = st.columns([1.3, 1.0])
@@ -1174,50 +1302,88 @@ def render_chat_workspace() -> None:
                 height=92,
             )
 
-    starter_slot = st.empty()
-    if not current_chat["messages"] and not st.session_state.pending_starter_prompt:
-        with starter_slot.container():
-            st.markdown("#### What can I help with today?")
-            starters = [
-                ("⚛️ Quantum Key Distribution", "Explain quantum key distribution (BB84 protocol) with a complete Python simulation script."),
-                ("🧠 Mathematical Induction Proof", "Prove by mathematical induction that for all n >= 1: 1 + 2 + ... + n = n(n+1)/2."),
-                ("⚡ Transformer vs Mamba", "Compare Transformer attention mechanisms vs Mamba state-space models in 3 crisp points."),
-                ("🌐 2026 AI Agent Breakthroughs", "What are the key architectures used in modern autonomous multi-agent systems?"),
-            ]
-            s_cols = st.columns(2)
-            for i, (title, p_text) in enumerate(starters):
-                if s_cols[i % 2].button(f"{title}\n\n{p_text[:58]}...", key=f"starter_{i}", width="stretch"):
-                    st.session_state.pending_starter_prompt = p_text
+    tft_slot = None
+    if st.session_state.present_screen_dock:
+        col_chat, col_tft = st.columns([1.65, 1.05], gap="medium")
+        with col_tft:
+            st.markdown("##### 📟 Live 2.4\" Screen Presenter")
+            tft_slot = st.empty()
+            _render_hardware_dock_content(tft_slot)
+            d1, d2, d3 = st.columns(3)
+            with d1:
+                if st.button("⏭ Page", key="dock_page_btn", width="stretch"):
+                    dispatch_screen_command({"action": "page"}, force=True)
+                    st.toast("Next 2.4\" TFT page triggered!", icon="📟")
+            with d2:
+                if st.button("🧹 Clear", key="dock_clear_btn", width="stretch"):
+                    dispatch_screen_command({"action": "clear"}, force=True)
+                    _render_hardware_dock_content(tft_slot)
+                    st.toast("2.4\" TFT cleared!", icon="🧹")
+            with d3:
+                if st.button("🎛 Full Studio", key="dock_full_btn", width="stretch"):
+                    st.session_state.workspace = "📟 2.4\" Hardware Screen ⚡"
                     st.rerun()
+            if IS_STREAMLIT_CLOUD:
+                st.caption(f"🔄 Browser Loopback → `127.0.0.1:8000` • ESP32 Target: `{st.session_state.esp_ip}`")
+            else:
+                st.caption(f"🟢 Local Hardware Bridge → ESP32 `{st.session_state.esp_ip}` / `192.168.4.1` / `COM4`")
+        chat_host = col_chat
+    else:
+        chat_host = st.container()
 
-    for idx, msg in enumerate(current_chat["messages"]):
-        with st.chat_message(msg["role"], avatar="⚡" if msg["role"] == "assistant" else "🧑‍🚀"):
-            if msg.get("thought"):
-                with st.expander("🧠 Thinking Process..."):
-                    st.markdown(msg["thought"])
-            st.markdown(msg["content"])
-            if msg.get("citations"):
-                st.markdown("**🔗 Grounded Sources:** " + " • ".join(f"[{c['title']}]({c['url']})" for c in msg["citations"]))
-            if msg.get("image_bytes"):
-                st.image(msg["image_bytes"], width=360)
-            if msg.get("meta"):
-                st.caption(msg["meta"])
-            if msg["role"] == "assistant":
-                b1, b2 = st.columns([0.2, 0.8])
-                with b1:
-                    if st.button("📟 Push to 2.4\" Screen", key=f"push_msg_{idx}"):
-                        dispatch_screen_command(
-                            {
-                                "action": "feed",
-                                "state": "ANSWERED",
-                                "question": msg.get("question", current_chat["title"]),
-                                "text": msg["content"],
-                                "provider": msg.get("provider", "Gemini"),
-                                "model": msg.get("model", "GENESIS AI 5.0"),
-                            },
-                            force=True,
-                        )
-                        st.toast("Sent to 2.4\" Screen!", icon="⚡")
+    with chat_host:
+        starter_slot = st.empty()
+        if not current_chat["messages"] and not st.session_state.pending_starter_prompt:
+            with starter_slot.container():
+                st.markdown("#### What can I help with today?")
+                starters = [
+                    ("⚛️ Quantum Key Distribution", "Explain quantum key distribution (BB84 protocol) with a complete Python simulation script."),
+                    ("🧠 Mathematical Induction Proof", "Prove by mathematical induction that for all n >= 1: 1 + 2 + ... + n = n(n+1)/2."),
+                    ("⚡ Transformer vs Mamba", "Compare Transformer attention mechanisms vs Mamba state-space models in 3 crisp points."),
+                    ("🌐 2026 AI Agent Breakthroughs", "What are the key architectures used in modern autonomous multi-agent systems?"),
+                ]
+                s_cols = st.columns(2)
+                for i, (title, p_text) in enumerate(starters):
+                    if s_cols[i % 2].button(f"{title}\n\n{p_text[:58]}...", key=f"starter_{i}", width="stretch"):
+                        st.session_state.pending_starter_prompt = p_text
+                        st.rerun()
+
+        msgs_list = current_chat["messages"]
+        for idx, msg in enumerate(msgs_list):
+            with st.chat_message(msg["role"], avatar="⚡" if msg["role"] == "assistant" else "🧑‍🚀"):
+                if msg.get("thought"):
+                    with st.expander("🧠 Thinking Process..."):
+                        st.markdown(msg["thought"])
+                st.markdown(msg["content"])
+                if msg.get("citations"):
+                    st.markdown("**🔗 Grounded Sources:** " + " • ".join(f"[{c['title']}]({c['url']})" for c in msg["citations"]))
+                if msg.get("image_bytes"):
+                    st.image(msg["image_bytes"], width=360)
+                if msg.get("meta"):
+                    st.caption(msg["meta"])
+                if msg["role"] == "assistant":
+                    b1, _ = st.columns([0.28, 0.72])
+                    with b1:
+                        if st.button("📟 Present on 2.4\" Screen", key=f"push_msg_{idx}"):
+                            dispatch_screen_command(
+                                {
+                                    "action": "feed",
+                                    "state": "ANSWERED",
+                                    "question": msg.get("question", current_chat["title"]),
+                                    "text": msg["content"],
+                                    "provider": msg.get("provider", "Gemini"),
+                                    "model": msg.get("model", "GENESIS AI 5.0"),
+                                },
+                                force=True,
+                            )
+                            if tft_slot is not None:
+                                _render_hardware_dock_content(tft_slot)
+                            st.toast("Presented on 2.4\" Screen!", icon="⚡")
+                elif idx == len(msgs_list) - 1:
+                    if st.button("🔄 Answer This Prompt Now", key=f"retry_orphan_{idx}"):
+                        recovered = msgs_list.pop()["content"]
+                        st.session_state.pending_starter_prompt = recovered
+                        st.rerun()
 
     user_prompt = st.chat_input("Message GENESIS AI 5.0, or ask for weather, timer, RGB light, image...")
     if not user_prompt and st.session_state.pending_starter_prompt:
@@ -1227,144 +1393,193 @@ def render_chat_workspace() -> None:
     if not user_prompt:
         return
 
-    starter_slot.empty()
-    if not current_chat["messages"]:
-        current_chat["title"] = user_prompt[:30] + ("..." if len(user_prompt) > 30 else "")
+    with chat_host:
+        starter_slot.empty()
+        if not current_chat["messages"]:
+            current_chat["title"] = user_prompt[:30] + ("..." if len(user_prompt) > 30 else "")
 
-    with st.chat_message("user", avatar="🧑‍🚀"):
-        st.markdown(user_prompt)
+        history_snapshot = [
+            {"role": m["role"], "content": m["content"]}
+            for m in current_chat["messages"][-6:]
+            if m.get("role") in ("user", "assistant") and m.get("content")
+        ]
 
-    dispatch_screen_command(
-        {"action": "feed", "state": "THINKING", "question": user_prompt, "provider": "SmartRouter", "model": selected_model},
-    )
+        with st.chat_message("user", avatar="🧑‍🚀"):
+            st.markdown(user_prompt)
 
-    attached_images: List[Dict[str, str]] = []
-    attached_text_blocks: List[str] = []
-    if uploaded_files:
-        for uf in uploaded_files:
-            raw = uf.read()
-            if uf.type.startswith("image/"):
-                attached_images.append({"mime_type": uf.type, "data": base64.b64encode(raw).decode("ascii")})
+        dispatch_screen_command(
+            {"action": "feed", "state": "THINKING", "question": user_prompt, "provider": "SmartRouter", "model": selected_model},
+        )
+        if tft_slot is not None:
+            _render_hardware_dock_content(tft_slot)
+
+        attached_images: List[Dict[str, str]] = []
+        attached_text_blocks: List[str] = []
+        if uploaded_files:
+            for uf in uploaded_files:
+                raw = uf.read()
+                if uf.type.startswith("image/"):
+                    attached_images.append({"mime_type": uf.type, "data": base64.b64encode(raw).decode("ascii")})
+                else:
+                    decoded = raw.decode("utf-8", errors="replace")[:8000]
+                    attached_text_blocks.append(f"[Attached file `{uf.name}`]:\n```\n{decoded}\n```")
+
+        gen_image_bytes: Optional[bytes] = None
+        citations: List[Dict[str, str]] = []
+        thought_txt = ""
+        final_text = ""
+        used_prov = "genesis-router"
+        used_mod = selected_model
+        meta_str = ""
+
+        with st.chat_message("assistant", avatar="⚡"):
+            detected_action = detect_system_action(user_prompt, image_mode_on=use_image)
+            if detected_action:
+                action_context, gen_image_bytes = _render_system_action_card(detected_action, user_prompt)
             else:
-                decoded = raw.decode("utf-8", errors="replace")[:8000]
-                attached_text_blocks.append(f"[Attached file `{uf.name}`]:\n```\n{decoded}\n```")
+                action_context = ""
 
-    current_chat["messages"].append({"role": "user", "content": user_prompt})
+            search_ctx = ""
+            if use_search or selected_model == "profile:search":
+                with st.status("🌐 Fetching Live Web Search Grounding...", expanded=False):
+                    search_ctx, citations = fetch_live_web_search(user_prompt)
 
-    gen_image_bytes: Optional[bytes] = None
-    citations: List[Dict[str, str]] = []
-    with st.chat_message("assistant", avatar="⚡"):
-        detected_action = detect_system_action(user_prompt, image_mode_on=use_image)
-        if detected_action:
-            action_context, gen_image_bytes = _render_system_action_card(detected_action, user_prompt)
-        else:
-            action_context = ""
+            if use_swarm or user_prompt.lower().startswith("@swarm"):
+                with st.spinner("🤖 Running 3-Agent Swarm Consensus (Architect + Critic + Synthesizer)..."):
+                    try:
+                        swarm = run_async(asyncio.wait_for(_run_swarm_async(user_prompt, st.session_state.user_keys), timeout=45.0))
+                        col_a, col_c = st.columns(2)
+                        with col_a:
+                            st.markdown("**🏛️ Architect Agent**")
+                            st.markdown(swarm["architect"])
+                        with col_c:
+                            st.markdown("**🛡️ Critic Agent**")
+                            st.markdown(swarm["critic"])
+                        st.markdown("---")
+                        st.markdown("**⚡ Chief Synthesizer Unified Consensus**")
+                        st.markdown(swarm["synthesizer"])
+                        final_text = swarm["synthesizer"]
+                        meta_str = f"3-Agent Swarm • {swarm['latency_ms']} ms • {swarm['tokens']} est. tokens"
+                        used_prov, used_mod = "swarm", "architect+critic+synth"
+                        st.session_state.last_tok_speed = round(swarm["tokens"] / max(0.2, swarm["latency_ms"] / 1000.0), 1)
+                        record_telemetry(used_prov, used_mod, swarm["latency_ms"], swarm["tokens"], "streamlit:swarm", user_prompt)
+                    except Exception:
+                        t_fb = time.perf_counter()
+                        final_text, used_prov, used_mod = SmartRouter.generate_uninterrupted_fallback_meta(
+                            user_prompt, skip_pollinations=True
+                        )
+                        lat_fb = round((time.perf_counter() - t_fb) * 1000, 1)
+                        toks_fb = max(1, len(final_text) // 4)
+                        meta_str = f"Provider: `{used_prov}` • Model: `{used_mod}` • {lat_fb} ms"
+                        st.markdown(final_text)
+                        st.caption(meta_str)
+                        record_telemetry(used_prov, used_mod, lat_fb, toks_fb, "streamlit:swarm-fallback", user_prompt)
+            else:
+                effective_prompt = user_prompt
+                if attached_text_blocks:
+                    effective_prompt += "\n\n" + "\n\n".join(attached_text_blocks)
+                if action_context:
+                    effective_prompt += f"\n\n[Live System Action Context]: {action_context}"
+                if search_ctx:
+                    effective_prompt += search_ctx
 
-        search_ctx = ""
-        if use_search or selected_model == "profile:search":
-            with st.status("🌐 Fetching Live Web Search Grounding...", expanded=False):
-                search_ctx, citations = fetch_live_web_search(user_prompt)
+                llm_messages: List[Dict[str, Any]] = [
+                    {
+                        "role": "system",
+                        "content": "You are GENESIS AI 5.0, created by Ishit Jain. Be crisp, accurate, helpful, and authoritative.",
+                    }
+                ]
+                llm_messages.extend(history_snapshot)
 
-        if use_swarm or user_prompt.lower().startswith("@swarm"):
-            with st.spinner("🤖 Running 3-Agent Swarm Consensus (Architect + Critic + Synthesizer)..."):
-                swarm = run_async(_run_swarm_async(user_prompt, st.session_state.user_keys))
-            col_a, col_c = st.columns(2)
-            with col_a:
-                st.markdown("**🏛️ Architect Agent**")
-                st.markdown(swarm["architect"])
-            with col_c:
-                st.markdown("**🛡️ Critic Agent**")
-                st.markdown(swarm["critic"])
-            st.markdown("---")
-            st.markdown("**⚡ Chief Synthesizer Unified Consensus**")
-            st.markdown(swarm["synthesizer"])
-            final_text = swarm["synthesizer"]
-            meta_str = f"3-Agent Swarm • {swarm['latency_ms']} ms • {swarm['tokens']} est. tokens"
-            used_prov, used_mod = "swarm", "architect+critic+synth"
-            thought_txt = ""
-            st.session_state.last_tok_speed = round(swarm["tokens"] / max(0.2, swarm["latency_ms"] / 1000.0), 1)
-            record_telemetry(used_prov, used_mod, swarm["latency_ms"], swarm["tokens"], "streamlit:swarm", user_prompt)
-        else:
-            effective_prompt = user_prompt
-            if attached_text_blocks:
-                effective_prompt += "\n\n" + "\n\n".join(attached_text_blocks)
-            if action_context:
-                effective_prompt += f"\n\n[Live System Action Context]: {action_context}"
-            if search_ctx:
-                effective_prompt += search_ctx
+                last_msg: Dict[str, Any] = {"role": "user", "content": effective_prompt}
+                if attached_images:
+                    last_msg["images"] = attached_images
+                    if selected_model.startswith("profile:") and get_resolved_key("GEMINI_API_KEY"):
+                        selected_model = "gemini/gemini-3.5-flash-lite"
+                llm_messages.append(last_msg)
 
-            llm_messages: List[Dict[str, Any]] = [
-                {
-                    "role": "system",
-                    "content": "You are GENESIS AI 5.0, created by Ishit Jain. Be crisp, accurate, helpful, and authoritative.",
-                }
-            ]
-            for prev in current_chat["messages"][-7:-1]:
-                llm_messages.append({"role": prev["role"], "content": prev["content"]})
+                eff_model = "profile:reasoning" if (use_reason and selected_model == "profile:auto") else selected_model
+                with st.spinner("⚡ Synthesizing response via GENESIS Cognitive Router..."):
+                    try:
+                        res = run_async(
+                            asyncio.wait_for(
+                                _collect_stream_async(
+                                    messages=llm_messages,
+                                    model_choice=eff_model,
+                                    profile="reasoning" if use_reason else None,
+                                    temperature=0.35 if use_reason else 0.7,
+                                    max_tokens=2048,
+                                    session_keys=st.session_state.user_keys,
+                                ),
+                                timeout=24.0,
+                            )
+                        )
+                    except Exception:
+                        t_fb = time.perf_counter()
+                        fb_txt, fb_prov, fb_mod = SmartRouter.generate_uninterrupted_fallback_meta(
+                            user_prompt, skip_pollinations=True
+                        )
+                        lat_fb = round((time.perf_counter() - t_fb) * 1000, 1)
+                        toks_fb = max(1, len(fb_txt) // 4)
+                        res = {
+                            "text": fb_txt,
+                            "provider": fb_prov,
+                            "model": fb_mod,
+                            "latency_ms": lat_fb,
+                            "tokens": toks_fb,
+                            "tok_s": round(toks_fb / max(0.15, lat_fb / 1000.0), 1),
+                            "decision": {},
+                        }
 
-            last_msg: Dict[str, Any] = {"role": "user", "content": effective_prompt}
-            if attached_images:
-                last_msg["images"] = attached_images
-                if selected_model.startswith("profile:") and get_resolved_key("GEMINI_API_KEY"):
-                    selected_model = "gemini/gemini-3.5-flash-lite"
-            llm_messages.append(last_msg)
+                raw_out = res["text"]
+                thought_match = re.search(r"<thought>([\s\S]*?)</thought>", raw_out, flags=re.IGNORECASE)
+                thought_txt = thought_match.group(1).strip() if thought_match else ""
+                final_text = re.sub(r"<thought>[\s\S]*?</thought>", "", raw_out, flags=re.IGNORECASE).strip()
 
-            eff_model = "profile:reasoning" if (use_reason and selected_model == "profile:auto") else selected_model
-            with st.spinner("⚡ Synthesizing response via GENESIS Cognitive Router..."):
-                res = run_async(
-                    _collect_stream_async(
-                        messages=llm_messages,
-                        model_choice=eff_model,
-                        profile="reasoning" if use_reason else None,
-                        temperature=0.35 if use_reason else 0.7,
-                        max_tokens=2048,
-                        session_keys=st.session_state.user_keys,
-                    )
-                )
+                if thought_txt:
+                    with st.expander("🧠 Thinking Process..."):
+                        st.markdown(thought_txt)
+                st.markdown(final_text)
 
-            raw_out = res["text"]
-            thought_match = re.search(r"<thought>([\s\S]*?)</thought>", raw_out, flags=re.IGNORECASE)
-            thought_txt = thought_match.group(1).strip() if thought_match else ""
-            final_text = re.sub(r"<thought>[\s\S]*?</thought>", "", raw_out, flags=re.IGNORECASE).strip()
+                if citations:
+                    st.markdown("**🔗 Grounded Sources:** " + " • ".join(f"[{c['title']}]({c['url']})" for c in citations))
 
-            if thought_txt:
-                with st.expander("🧠 Thinking Process..."):
-                    st.markdown(thought_txt)
-            st.markdown(final_text)
+                meta_str = f"Provider: `{res['provider']}` • Model: `{res['model']}` • {res['latency_ms']} ms • {res['tok_s']} tok/s"
+                st.caption(meta_str)
+                used_prov, used_mod = res["provider"], res["model"]
+                st.session_state.last_tok_speed = res["tok_s"]
+                record_telemetry(used_prov, used_mod, res["latency_ms"], res["tokens"], "streamlit:chat", user_prompt)
 
-            if citations:
-                st.markdown("**🔗 Grounded Sources:** " + " • ".join(f"[{c['title']}]({c['url']})" for c in citations))
-
-            meta_str = f"Provider: `{res['provider']}` • Model: `{res['model']}` • {res['latency_ms']} ms • {res['tok_s']} tok/s"
-            st.caption(meta_str)
-            used_prov, used_mod = res["provider"], res["model"]
-            st.session_state.last_tok_speed = res["tok_s"]
-            record_telemetry(used_prov, used_mod, res["latency_ms"], res["tokens"], "streamlit:chat", user_prompt)
-
-    current_chat["messages"].append(
-        {
-            "role": "assistant",
-            "content": final_text,
-            "thought": thought_txt,
-            "citations": citations,
-            "image_bytes": gen_image_bytes,
-            "question": user_prompt,
-            "provider": used_prov,
-            "model": used_mod,
-            "meta": meta_str,
-        }
+    current_chat["messages"].extend(
+        [
+            {"role": "user", "content": user_prompt},
+            {
+                "role": "assistant",
+                "content": final_text,
+                "thought": thought_txt,
+                "citations": citations,
+                "image_bytes": gen_image_bytes,
+                "question": user_prompt,
+                "provider": used_prov,
+                "model": used_mod,
+                "meta": meta_str,
+            },
+        ]
     )
 
-    dispatch_screen_command(
-        {
-            "action": "feed",
-            "state": "ANSWERED",
-            "question": user_prompt,
-            "text": final_text,
-            "provider": used_prov,
-            "model": used_mod,
-        }
-    )
+    if not (detected_action and detected_action.get("type") == "image_gen" and gen_image_bytes is not None):
+        dispatch_screen_command(
+            {
+                "action": "feed",
+                "state": "ANSWERED",
+                "question": user_prompt,
+                "text": final_text,
+                "provider": used_prov,
+                "model": used_mod,
+            }
+        )
+    if tft_slot is not None:
+        _render_hardware_dock_content(tft_slot)
 
 
 # ---------------------------------------------------------------------------
@@ -1747,59 +1962,11 @@ def render_hardware_screen_workspace() -> None:
     left_sim, right_ctrl = st.columns([1.15, 1.0])
 
     with shared["lock"]:
-        cur_state = shared["state"]
-        cur_q = shared["question"]
-        cur_ans = shared["answer"]
-        cur_prov = shared["provider"]
-        cur_mod = shared["model"]
         cur_rgb = shared["rgb_brightness"]
-        cur_fw = shared["fusion_watermark"]
-        cur_img = shared.get("last_image_bytes")
         sync_logs = list(shared["sync_log"])
 
     with left_sim:
-        logo_b64 = _logo_b64()
-        bg_watermark = (
-            f"background-image:url('data:image/png;base64,{logo_b64}');opacity:0.13;"
-            if (cur_fw and logo_b64)
-            else "opacity:0;"
-        )
-        img_preview_html = ""
-        if cur_state == "IMAGE_VIEW" and cur_img:
-            img_mime = "image/png" if cur_img[:4] == b"\x89PNG" else "image/jpeg"
-            img_b64 = base64.b64encode(cur_img).decode("ascii")
-            img_preview_html = f'<div style="text-align:center;margin:6px 0;"><img src="data:{img_mime};base64,{img_b64}" style="max-height:135px;border:1px solid #00f0ff;border-radius:6px;"></div>'
-
-        safe_q_html = html_lib.escape(cur_q).replace("\r", "").replace("\n", "<br/>")
-        safe_ans_html = html_lib.escape(cur_ans[:560]).replace("\r", "").replace("\n", "<br/>")
-        pcb_lines = [
-            '<div style="background:linear-gradient(180deg,#5c0b0b,#3a0606);border:2px solid #b91c1c;border-radius:18px;padding:18px;box-shadow:0 0 36px rgba(239,68,68,0.28);">',
-            '<div style="display:flex;justify-content:space-between;font-family:monospace;font-size:10px;color:#fbbf24;margin-bottom:8px;">',
-            '<span>VCC GND CS RST DC MOSI SCK LED</span>',
-            '<span>MSP2402 2.4&quot; ILI9341 (320x240)</span>',
-            '</div>',
-            '<div style="position:relative;background:#000;border:4px solid #111827;border-radius:8px;min-height:270px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;font-family:Consolas,monospace;">',
-            f'<div style="position:absolute;inset:0;background-position:center;background-size:150px 150px;background-repeat:no-repeat;pointer-events:none;{bg_watermark}"></div>',
-            '<div style="background:#051c38;border-bottom:2px solid #22d3ee;padding:6px 10px;display:flex;justify-content:space-between;font-size:11px;color:#22d3ee;z-index:2;">',
-            '<span>⚡ GENESIS AI 5.0</span>',
-            f'<span style="color:#34d399;">{html_lib.escape(str(cur_state))} • {html_lib.escape(str(cur_prov))}</span>',
-            '</div>',
-            '<div style="padding:10px 12px;flex:1;z-index:2;overflow-y:auto;">',
-            '<div style="color:#34d399;font-size:11px;font-weight:700;">▶ PROMPT:</div>',
-            f'<div style="color:#a5f3fc;font-size:12px;margin-bottom:8px;">{safe_q_html}</div>',
-            img_preview_html,
-            f'<div style="color:#fbbf24;font-size:11px;font-weight:700;">✦ GENESIS ANSWER ({html_lib.escape(str(cur_mod))}):</div>',
-            f'<div style="color:#f1f5f9;font-size:12px;line-height:1.45;border-left:2px solid #fbbf24;padding-left:8px;">{safe_ans_html}</div>',
-            '</div>',
-            '<div style="background:#0d1624;border-top:1px solid #334155;padding:5px 10px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;z-index:2;">',
-            f'<span>IP: {html_lib.escape(st.session_state.esp_ip)} • RGB GPIO27: {cur_rgb}%</span>',
-            '<span style="color:#22d3ee;">RISC-V 240MHz</span>',
-            '</div>',
-            '</div>',
-            '<div style="text-align:center;font-family:monospace;font-size:10px;color:#fbbf24;margin-top:8px;">ESP32-C5 Wi-Fi 6 • GENESIS PHOTON GPIO27 CHROMA • USB-C / CHARGER READY</div>',
-            '</div>',
-        ]
-        st.markdown("\n".join(p for p in pcb_lines if p), unsafe_allow_html=True)
+        st.markdown(_build_tft_bezel_html(shared, st.session_state.esp_ip, compact=False), unsafe_allow_html=True)
 
     with right_ctrl:
         st.markdown("#### 🎮 Tactile Screen & RGB Controls")
@@ -1807,19 +1974,28 @@ def render_hardware_screen_workspace() -> None:
         if st.button("🚀 Query AI & Stream to 2.4\" Screen", type="primary", width="stretch"):
             dispatch_screen_command({"action": "feed", "state": "THINKING", "question": quick_q, "provider": "Gemini", "model": "GENESIS 5.0"}, force=True)
             with st.spinner("Generating concise 2.4\" TFT response..."):
-                res = run_async(
-                    _collect_stream_async(
-                        messages=[
-                            {"role": "system", "content": "Answer concisely in under 55 plain ASCII words for a 320x240 TFT display."},
-                            {"role": "user", "content": quick_q},
-                        ],
-                        model_choice="profile:speed",
-                        profile="speed",
-                        temperature=0.5,
-                        max_tokens=200,
-                        session_keys=st.session_state.user_keys,
+                try:
+                    res = run_async(
+                        asyncio.wait_for(
+                            _collect_stream_async(
+                                messages=[
+                                    {"role": "system", "content": "Answer concisely in under 55 plain ASCII words for a 320x240 TFT display."},
+                                    {"role": "user", "content": quick_q},
+                                ],
+                                model_choice="profile:speed",
+                                profile="speed",
+                                temperature=0.5,
+                                max_tokens=200,
+                                session_keys=st.session_state.user_keys,
+                            ),
+                            timeout=20.0,
+                        )
                     )
-                )
+                except Exception:
+                    fb_txt, fb_prov, fb_mod = SmartRouter.generate_uninterrupted_fallback_meta(
+                        quick_q, skip_pollinations=True
+                    )
+                    res = {"text": fb_txt, "provider": fb_prov, "model": fb_mod}
             dispatch_screen_command(
                 {"action": "feed", "state": "ANSWERED", "question": quick_q, "text": res["text"], "provider": res["provider"], "model": res["model"]},
                 force=True,

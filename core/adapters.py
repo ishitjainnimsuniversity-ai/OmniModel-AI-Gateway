@@ -273,28 +273,34 @@ class UniversalAdapter:
                         yield {"delta": f"Cohere Error ({response.status_code}): {response.text}", "done": True, "error": True}
 
                 elif provider_id == "pollinations":
+                    clean_msgs = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in messages]
                     payload = {
                         "model": model or "openai",
-                        "messages": messages,
+                        "messages": clean_msgs,
                         "temperature": temperature,
                         "stream": False
                     }
-                    response = await client.post(target_url, headers=headers, json=payload, timeout=18.0)
+                    response = await client.post(target_url, headers=headers, json=payload, timeout=7.5)
                     latency = round((time.perf_counter() - start_time) * 1000, 2)
                     full_text = ""
+                    rate_limited = response.status_code in (402, 429, 502, 503)
                     if response.status_code == 200:
                         try:
                             data = response.json()
-                            full_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                            full_text = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
                         except Exception:
-                            full_text = response.text
-                    if not full_text:
-                        # Fallback to direct GET endpoint
+                            full_text = response.text.strip()
+                    if full_text and ("Free limit reached" in full_text or "enter.pollinations.ai" in full_text):
+                        full_text = ""
+                        rate_limited = True
+                    if not full_text and not rate_limited:
                         import urllib.parse
-                        last_q = messages[-1].get("content", "Hello") if messages else "Hello"
-                        r_get = await client.get(f"https://text.pollinations.ai/{urllib.parse.quote(last_q)}", timeout=15.0)
+                        last_q = clean_msgs[-1].get("content", "Hello") if clean_msgs else "Hello"
+                        r_get = await client.get(f"https://text.pollinations.ai/{urllib.parse.quote(last_q[:400])}", timeout=5.5)
                         if r_get.status_code == 200:
-                            full_text = r_get.text
+                            cand = r_get.text.strip()
+                            if cand and "Free limit reached" not in cand and "enter.pollinations.ai" not in cand:
+                                full_text = cand
 
                     if full_text and len(full_text.strip()) > 0:
                         words = full_text.split(" ")
@@ -444,7 +450,7 @@ class UniversalAdapter:
 
         if provider_id == "pollinations":
             try:
-                async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
+                async with httpx.AsyncClient(timeout=6.0, verify=False) as client:
                     resp = await client.post(
                         "https://text.pollinations.ai/openai",
                         json={"model": "openai", "messages": [{"role": "user", "content": "OK"}], "stream": False}
@@ -452,6 +458,8 @@ class UniversalAdapter:
                     latency = round((time.perf_counter() - start) * 1000, 2)
                     if resp.status_code == 200:
                         return {"provider": provider_id, "status": "active", "latency_ms": latency, "message": "Connected successfully (Keyless Cloud)"}
+                    if resp.status_code in (402, 429):
+                        return {"provider": provider_id, "status": "rate_limited", "latency_ms": latency, "message": "45s shared-IP cooldown; Live Knowledge Engine active"}
                     return {"provider": provider_id, "status": "error", "latency_ms": latency, "message": f"HTTP {resp.status_code}"}
             except Exception as e:
                 return {"provider": provider_id, "status": "error", "latency_ms": 0, "message": str(e)}

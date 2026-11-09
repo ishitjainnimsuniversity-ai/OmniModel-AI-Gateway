@@ -3,9 +3,14 @@ Intelligent Intent Classifier, Smart Router and Auto-Fallback Waterfall Engine
 GENESIS AI 5.0 Dual-Brain Architecture (Local Offline Ollama + Cloud Frontier AI)
 """
 
+import ast
+import asyncio
+import math
+import operator
 import os
 import re
 import socket
+import urllib.parse
 import httpx
 from typing import Dict, Any, List, Optional, Tuple, AsyncGenerator
 from core.providers import PROVIDERS_METADATA
@@ -196,7 +201,38 @@ class SmartRouter:
             if is_cloud and profile_key == "local_offline":
                 profile_key = "general"
             profile = cls.ROUTING_PROFILES[profile_key]
-            chain = [pair for pair in profile["chain"] if not (is_cloud and pair[0] == "ollama")]
+            base_chain = [pair for pair in profile["chain"] if not (is_cloud and pair[0] == "ollama")]
+            s_keys = session_keys or {}
+            # Dynamically prioritize any provider with an active API key ahead of keyless Pollinations
+            configured_pairs: List[Tuple[str, str]] = []
+            pollinations_pairs: List[Tuple[str, str]] = []
+            unconfigured_pairs: List[Tuple[str, str]] = []
+            seen_pids = set()
+
+            def _has_active_key(pid_chk: str) -> bool:
+                if pid_chk == "ollama":
+                    return not is_cloud
+                if pid_chk == "pollinations":
+                    return True
+                ev_chk = PROVIDERS_METADATA.get(pid_chk, {}).get("env_var")
+                return bool(api_key_override or (ev_chk and (s_keys.get(ev_chk) or GatewayConfig.get_key(ev_chk))))
+
+            for pid_b, mod_b in base_chain:
+                seen_pids.add(pid_b)
+                if pid_b == "pollinations":
+                    pollinations_pairs.append((pid_b, mod_b))
+                elif _has_active_key(pid_b):
+                    configured_pairs.append((pid_b, mod_b))
+                else:
+                    unconfigured_pairs.append((pid_b, mod_b))
+
+            for pid_k, meta_k in PROVIDERS_METADATA.items():
+                if pid_k in seen_pids or pid_k in ("ollama", "pollinations"):
+                    continue
+                if _has_active_key(pid_k):
+                    configured_pairs.append((pid_k, meta_k.get("default_model", "")))
+
+            chain = configured_pairs + pollinations_pairs + unconfigured_pairs
             profile_name = profile["name"]
 
         # Yield routing metadata header
@@ -213,10 +249,13 @@ class SmartRouter:
         # Try providers down the waterfall chain
         success = False
         attempted_providers = []
+        tried_pollinations = False
         used_provider = "pollinations" if is_cloud else "ollama"
         used_model = "openai" if is_cloud else "llama3.2:1b"
 
         for provider_id, model in chain:
+            if provider_id == "pollinations":
+                tried_pollinations = True
             meta = PROVIDERS_METADATA.get(provider_id, {})
             attempted_providers.append(f"{meta.get('name', provider_id)} ({model})")
 
@@ -272,9 +311,9 @@ class SmartRouter:
 
         if not success:
             last_prompt = messages[-1].get("content", "") if messages else "Hello"
-            fallback_answer = cls.generate_uninterrupted_fallback(last_prompt)
-            fb_provider = "pollinations" if is_cloud else "ollama"
-            fb_model = "openai" if is_cloud else "llama3.2:1b"
+            fallback_answer, fb_provider, fb_model = await asyncio.to_thread(
+                cls.generate_uninterrupted_fallback_meta, last_prompt, tried_pollinations
+            )
             words = fallback_answer.split(" ")
             for i, w in enumerate(words):
                 chunk_text = w + (" " if i < len(words) - 1 else "")
@@ -294,45 +333,209 @@ class SmartRouter:
             }
 
     @classmethod
-    def generate_uninterrupted_fallback(cls, prompt: str) -> str:
-        """
-        Guaranteed fallback via Local Ollama (when running locally) and Pollinations Cloud.
-        """
+    def _safe_eval_math(cls, prompt: str) -> Optional[str]:
+        expr = re.sub(r"^(what is|calculate|compute|solve|evaluate|equals|=)\s+", "", prompt.strip(), flags=re.IGNORECASE)
+        expr = expr.strip().rstrip("?.=").replace("^", "**")
+        if not expr or not re.fullmatch(r"[\d\s+\-*/().%*,sqrtpicosinta]+", expr, flags=re.IGNORECASE):
+            return None
+        if not any(ch.isdigit() for ch in expr) or not any(op in expr for op in ("+", "-", "*", "/", "**", "%", "sqrt")):
+            return None
+        ops = {
+            ast.Add: operator.add,
+            ast.Sub: operator.sub,
+            ast.Mult: operator.mul,
+            ast.Div: operator.truediv,
+            ast.FloorDiv: operator.floordiv,
+            ast.Mod: operator.mod,
+            ast.Pow: operator.pow,
+            ast.USub: operator.neg,
+            ast.UAdd: operator.pos,
+        }
+        funcs = {"sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "tan": math.tan, "pi": math.pi}
+
+        def _eval_node(node):
+            if isinstance(node, ast.Expression):
+                return _eval_node(node.body)
+            if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+                return node.value
+            if isinstance(node, ast.Name) and node.id.lower() in funcs and isinstance(funcs[node.id.lower()], float):
+                return funcs[node.id.lower()]
+            if isinstance(node, ast.UnaryOp) and type(node.op) in ops:
+                return ops[type(node.op)](_eval_node(node.operand))
+            if isinstance(node, ast.BinOp) and type(node.op) in ops:
+                if isinstance(node.op, ast.Pow):
+                    exp_v = _eval_node(node.right)
+                    if abs(exp_v) > 200:
+                        raise ValueError("Exponent too large")
+                return ops[type(node.op)](_eval_node(node.left), _eval_node(node.right))
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                fn = funcs.get(node.func.id.lower())
+                if callable(fn) and len(node.args) == 1:
+                    return fn(_eval_node(node.args[0]))
+            raise ValueError("Unsupported AST")
+
+        try:
+            res = _eval_node(ast.parse(expr, mode="eval"))
+            if isinstance(res, float) and res.is_integer():
+                res = int(res)
+            elif isinstance(res, float):
+                res = round(res, 6)
+            return f"**Calculated Result:** `{expr}` = **{res}**"
+        except Exception:
+            return None
+
+    @classmethod
+    def _knowledge_synthesis_fallback(cls, prompt: str) -> Optional[str]:
+        p = (prompt or "").strip()
+        pl = p.lower()
+
+        # 1. Conversational & Identity intents
+        if re.fullmatch(r"(hi+|hello+|hey+|yo+|good morning|good evening|good afternoon|namaste|sup)[!. ]*", pl):
+            return (
+                "Hello! I am **GENESIS AI 5.0**, created by Ishit Jain. "
+                'Ask me anything, enable **Web Search** / **Swarm** / **Image**, or present answers live on your **2.4" ESP32 Screen**!'
+            )
+        if re.fullmatch(r"(hi+|hello+|hey+)?\s*(how are you|how's it going|what's up|wassup)[?.! ]*", pl):
+            return (
+                "Running at peak cognitive telemetry! Ask any question, run Web Search / Swarm, "
+                'or mirror responses live onto your **2.4" ESP32-C5 Screen**.'
+            )
+        if re.fullmatch(r"(thanks|thank you|thx|ok|okay|cool|nice|great|awesome)[!. ]*", pl):
+            return 'You are welcome! Ask your next question anytime — chat and your **2.4" Screen** stay synced.'
+        if re.search(r"(who are you|what is genesis|what can you do|who created you|who made you|who built you)", pl):
+            return (
+                "I am **GENESIS AI 5.0**, created by **Ishit Jain** — a multi-provider AI gateway unifying 22 model providers, "
+                'live web grounding, 3-agent swarm debate, Flux.1 image generation, and real-time 2.4" ESP32-C5 TFT hardware sync.'
+            )
+
+        # 2. Safe Arithmetic
+        math_ans = cls._safe_eval_math(p)
+        if math_ans:
+            return math_ans
+
+        # 3. Clean query for Live Knowledge (handles conversational prefixes & typos)
+        clean = p
+        for _ in range(3):
+            clean = re.sub(
+                r"^(hi|hello|hey|please|tell me|can you|explain|what is|what are|who is|who are|define|how does|how do|describe)\b\s*",
+                "",
+                clean,
+                flags=re.IGNORECASE,
+            ).strip()
+            clean = re.sub(r"^(a|an|the|about|to me)\b\s*", "", clean, flags=re.IGNORECASE).strip()
+        clean = clean.strip(" ?!.,:") or p
+
+        headers = {"User-Agent": "OmniModelGateway/5.0 (https://github.com/ishitjainnimsuniversity-ai/OmniModel-AI-Gateway)"}
+        wiki_extract = ""
+        wiki_title = ""
+        wiki_url = ""
+        ddg_facts: List[str] = []
+
+        try:
+            with httpx.Client(timeout=5.5, headers=headers, follow_redirects=True) as client:
+                try:
+                    rw = client.get(
+                        "https://en.wikipedia.org/w/api.php",
+                        params={"action": "query", "list": "search", "srsearch": clean, "srinfo": "suggestion", "srlimit": 2, "format": "json"},
+                    )
+                    if rw.status_code == 200:
+                        qobj = rw.json().get("query", {})
+                        hits = qobj.get("search") or []
+                        sug = (qobj.get("searchinfo") or {}).get("suggestion")
+                        if not hits and sug:
+                            rw2 = client.get(
+                                "https://en.wikipedia.org/w/api.php",
+                                params={"action": "query", "list": "search", "srsearch": sug, "srlimit": 2, "format": "json"},
+                            )
+                            if rw2.status_code == 200:
+                                hits = rw2.json().get("query", {}).get("search") or []
+                        if hits:
+                            wiki_title = hits[0].get("title", "")
+                            rs = client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(wiki_title.replace(' ', '_'))}")
+                            if rs.status_code == 200:
+                                dsum = rs.json()
+                                wiki_extract = (dsum.get("extract") or "").strip()
+                                wiki_url = dsum.get("content_urls", {}).get("desktop", {}).get("page", "")
+                except Exception:
+                    pass
+
+                try:
+                    rd = client.get("https://api.duckduckgo.com/", params={"q": clean, "format": "json", "no_html": 1, "skip_disambig": 1})
+                    if rd.status_code == 200:
+                        dd = rd.json()
+                        inst = (dd.get("Answer") or dd.get("AbstractText") or dd.get("Definition") or "").strip()
+                        if inst and inst not in wiki_extract:
+                            ddg_facts.append(inst)
+                        for rel in (dd.get("RelatedTopics") or [])[:2]:
+                            if isinstance(rel, dict) and rel.get("Text"):
+                                ddg_facts.append(rel["Text"][:220])
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        parts: List[str] = []
+        if wiki_extract:
+            header_title = f"### {wiki_title}" if wiki_title else "### Overview"
+            parts.append(f"{header_title}\n\n{wiki_extract}")
+        if ddg_facts:
+            bullets = "\n".join(f"- {f}" for f in ddg_facts[:3])
+            parts.append(f"**Key Highlights:**\n{bullets}")
+        if wiki_url:
+            parts.append(f"[Read full topic on Wikipedia]({wiki_url})")
+
+        if parts:
+            return "\n\n".join(parts)
+        return None
+
+    @classmethod
+    def generate_uninterrupted_fallback_meta(cls, prompt: str, skip_pollinations: bool = False) -> Tuple[str, str, str]:
+        """Returns (answer_text, provider_id, model_id) across Local Ollama, Pollinations, and Live Knowledge Engine."""
         # 1. Local Ollama first (skip inside cloud containers)
         if not _is_cloud_env():
             try:
                 r = httpx.post(
                     "http://localhost:11434/v1/chat/completions",
                     json={"model": "llama3.2:1b", "messages": [{"role": "user", "content": prompt}]},
-                    timeout=12.0
+                    timeout=10.0
                 )
                 if r.status_code == 200:
-                    ans = r.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                    ans = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
                     if ans:
-                        return ans
+                        return ans, "ollama", "llama3.2:1b"
             except Exception:
                 pass
 
-        # 2. Cloud fallback (Pollinations POST then GET)
-        try:
-            r_post = httpx.post(
-                "https://text.pollinations.ai/openai",
-                json={"model": "openai", "messages": [{"role": "user", "content": prompt}], "stream": False},
-                timeout=12.0
-            )
-            if r_post.status_code == 200:
-                ans = (r_post.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-                if ans:
-                    return ans
-        except Exception:
-            pass
+        # 2. Cloud fallback (Pollinations fast attempt if not already failed this turn)
+        if not skip_pollinations:
+            try:
+                r_post = httpx.post(
+                    "https://text.pollinations.ai/openai",
+                    json={"model": "openai", "messages": [{"role": "user", "content": prompt}], "stream": False},
+                    timeout=6.5
+                )
+                if r_post.status_code == 200:
+                    ans = (r_post.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                    if ans and "Free limit reached" not in ans and "enter.pollinations.ai" not in ans:
+                        return ans, "pollinations", "openai"
+            except Exception:
+                pass
 
-        try:
-            import urllib.parse
-            r2 = httpx.get(f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}", timeout=10.0)
-            if r2.status_code == 200 and r2.text.strip():
-                return r2.text.strip()
-        except Exception:
-            pass
+        # 3. Live Knowledge, Spell-Corrected Summary & Math Synthesis (works 100% keyless without 45s cooldowns)
+        synth = cls._knowledge_synthesis_fallback(prompt)
+        if synth:
+            return synth, "genesis-knowledge", "live-wiki-ddg"
 
-        return f"GENESIS AI: Processed request for {prompt}"
+        return (
+            "⚡ **Keyless Cooldown Notice:** Free Pollinations inference is in its 45-second IP cooldown and no cloud API key "
+            "(Gemini / OpenRouter / Groq) is currently configured in Secrets.\n\n"
+            "- Wait ~45 seconds and resend your prompt, **or**\n"
+            "- Add a free API key in **🌐 22 Providers Matrix** (or Streamlit **App Settings → Secrets**) for unlimited frontier AI.",
+            "genesis-router",
+            "keyless-guard",
+        )
+
+    @classmethod
+    def generate_uninterrupted_fallback(cls, prompt: str) -> str:
+        text, _, _ = cls.generate_uninterrupted_fallback_meta(prompt)
+        return text
