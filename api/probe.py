@@ -42,12 +42,13 @@ class handler(BaseHTTPRequestHandler):
             "dotenv",
             "aiofiles",
             "core.config",
-            "server",
+            "gateway_runtime",
+            "api.gateway",
         ):
             try:
                 m = importlib.import_module(mod)
                 info = {"ok": True, "version": getattr(m, "__version__", None)}
-                if mod == "server":
+                if mod in ("gateway_runtime", "api.gateway"):
                     info["core_error"] = getattr(m, "_CORE_IMPORT_ERROR", None)
                     info["has_app"] = hasattr(m, "app")
                 results["imports"][mod] = info
