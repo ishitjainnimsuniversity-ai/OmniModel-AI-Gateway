@@ -654,6 +654,30 @@ class SmartRouter:
         except Exception:
             pass
 
+        # 2b. Google Gemini via Vault Key (Zero IP cooldown, sub-second latency)
+        try:
+            from core.vault import get_vault_key
+            gem_key = get_vault_key("GEMINI_API_KEY")
+            if gem_key:
+                r_gem = httpx.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gem_key}",
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "systemInstruction": {"parts": [{"text": "You are GENESIS AI 5.0, created by Ishit Jain. Be strictly factual, direct, and concise."}]}
+                    },
+                    timeout=httpx.Timeout(9.0, connect=3.0)
+                )
+                if r_gem.status_code == 200:
+                    g_data = r_gem.json()
+                    cands = g_data.get("candidates", [])
+                    if cands:
+                        parts = cands[0].get("content", {}).get("parts", [])
+                        text = "".join(p.get("text", "") for p in parts).strip()
+                        if text:
+                            return text, "gemini", "gemini-2.5-flash"
+        except Exception:
+            pass
+
         # 3. Cloud fallback (Pollinations fast attempt if not already failed this turn)
         if not skip_pollinations:
             try:

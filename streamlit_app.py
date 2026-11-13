@@ -101,15 +101,23 @@ SmartRouter = _core_router.SmartRouter
 # ---------------------------------------------------------------------------
 def _hydrate_host_secrets() -> None:
     try:
+        from core.vault import get_vault_keys
+        for k, v in get_vault_keys().items():
+            if v and v.strip():
+                os.environ.setdefault(k, v.strip())
+    except Exception:
+        pass
+
+    try:
         secrets_obj = st.secrets
         for key in list(secrets_obj.keys()):
             val = secrets_obj[key]
             if isinstance(val, str) and val.strip():
-                os.environ.setdefault(key, val.strip())
+                os.environ[key] = val.strip()
             elif isinstance(val, dict):
                 for sub_k, sub_v in val.items():
                     if isinstance(sub_v, str) and sub_v.strip():
-                        os.environ.setdefault(str(sub_k), sub_v.strip())
+                        os.environ[str(sub_k)] = sub_v.strip()
     except Exception:
         pass
 
