@@ -72,13 +72,13 @@ class SmartRouter:
             "name": "💻 Elite Software Architecture & Code",
             "description": "Complex full-stack coding with Claude Code, Cursor, FreeLLMAPI, OmniRoute & Gemini",
             "chain": [
+                ("openrouter", "openrouter/free"),
+                ("gemini", "gemini-3.8-flash"),
                 ("freellmapi", "auto"),
                 ("omniroute", "auto"),
-                ("openrouter", "openrouter/free"),
-                ("pollinations", "openai"),
-                ("gemini", "gemini-pro-latest"),
                 ("cerebras", "llama3.1-70b"),
                 ("groq", "llama-3.3-70b-versatile"),
+                ("pollinations", "openai"),
                 ("ollama", "llama3.2:1b")
             ]
         },
@@ -660,7 +660,7 @@ class SmartRouter:
             gem_key = get_vault_key("GEMINI_API_KEY")
             if gem_key:
                 r_gem = httpx.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gem_key}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gem_key}",
                     json={
                         "contents": [{"parts": [{"text": prompt}]}],
                         "systemInstruction": {"parts": [{"text": "You are GENESIS AI 5.0, created by Ishit Jain. Be strictly factual, direct, and concise."}]}
@@ -674,7 +674,7 @@ class SmartRouter:
                         parts = cands[0].get("content", {}).get("parts", [])
                         text = "".join(p.get("text", "") for p in parts).strip()
                         if text:
-                            return text, "gemini", "gemini-2.5-flash"
+                            return text, "gemini", "gemini-3.8-flash"
         except Exception:
             pass
 
