@@ -43,6 +43,13 @@ class GatewayConfig:
             clean = val.strip().strip("'\"")
             if len(clean) > 0:
                 return clean
+        try:
+            from core.vault import get_vault_key
+            v_val = get_vault_key(env_var)
+            if v_val and v_val.strip():
+                return v_val.strip()
+        except Exception:
+            pass
         return None
 
     @classmethod

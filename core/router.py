@@ -424,9 +424,18 @@ class SmartRouter:
 
         # 3. Clean query for Live Knowledge (handles conversational prefixes, question verbs & articles)
         clean = p
+        # Strip trailing formatting constraints (e.g. "in 4 bullet points", "in 2 sentences", "step by step")
+        clean = re.sub(
+            r"\b(in\s+\d+\s+(crisp\s+|short\s+|brief\s+)?(bullet\s+points?|points?|sentences?|words?|lines?|paragraphs?)|in\s+detail|step\s+by\s+step|briefly|concisely|for\s+beginners?)\b.*$",
+            "",
+            clean,
+            flags=re.IGNORECASE,
+        ).strip()
+        clean = re.sub(r"\b(works|work|overview|summary)\b$", "", clean, flags=re.IGNORECASE).strip()
+
         for _ in range(3):
             clean = re.sub(
-                r"^(hi+|hello+|hey+|please|tell me|can you|explain|what is|what are|what was|what were|who is|who are|who was|who were|define|how does|how do|describe)\b\s*",
+                r"^(hi+|hello+|hey+|please|tell me|can you|could you|explain|what is|what are|what was|what were|who is|who are|who was|who were|define|how does|how do|how to|how can|how|describe)\b\s*",
                 "",
                 clean,
                 flags=re.IGNORECASE,
@@ -604,7 +613,7 @@ class SmartRouter:
 
     @classmethod
     def generate_uninterrupted_fallback_meta(cls, prompt: str, skip_pollinations: bool = False) -> Tuple[str, str, str]:
-        """Returns (answer_text, provider_id, model_id) across Local Ollama, Pollinations, and Live Knowledge Engine."""
+        """Returns (answer_text, provider_id, model_id) across Local Ollama, OpenRouter Free Pool, Pollinations, and Live Knowledge Engine."""
         # 1. Local Ollama first (skip inside cloud containers)
         if not _is_cloud_env():
             try:
@@ -620,7 +629,32 @@ class SmartRouter:
             except Exception:
                 pass
 
-        # 2. Cloud fallback (Pollinations fast attempt if not already failed this turn)
+        # 2. OpenRouter Free Pool via Vault Key (Fast, high-fidelity frontier fallback without IP blocks)
+        try:
+            from core.vault import get_vault_key
+            or_key = get_vault_key("OPENROUTER_API_KEY")
+            if or_key:
+                r_or = httpx.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": "openrouter/free",
+                        "messages": [
+                            {"role": "system", "content": "You are GENESIS AI 5.0, created by Ishit Jain. Be strictly factual, direct, and concise."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "max_tokens": 800
+                    },
+                    timeout=httpx.Timeout(9.0, connect=3.0)
+                )
+                if r_or.status_code == 200:
+                    or_ans = (r_or.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+                    if or_ans:
+                        return or_ans, "openrouter", "openrouter/free"
+        except Exception:
+            pass
+
+        # 3. Cloud fallback (Pollinations fast attempt if not already failed this turn)
         if not skip_pollinations:
             try:
                 sys_ground = (
@@ -648,7 +682,7 @@ class SmartRouter:
             except Exception:
                 pass
 
-        # 3. Live Knowledge, Spell-Corrected Summary & Math Synthesis (works 100% keyless without 45s cooldowns)
+        # 4. Live Knowledge, Spell-Corrected Summary & Math Synthesis
         synth = cls._knowledge_synthesis_fallback(prompt)
         if synth:
             return synth, "genesis-knowledge", "live-wiki-ddg"
