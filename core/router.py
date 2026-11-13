@@ -53,7 +53,7 @@ class SmartRouter:
             "chain": [
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-3.5-flash-lite"),
+                ("gemini", "gemini-flash-latest"),
                 ("groq", "llama-3.3-70b-versatile"),
                 ("ollama", "llama3.2:1b")
             ]
@@ -64,7 +64,7 @@ class SmartRouter:
             "chain": [
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-3.8-flash"),
+                ("gemini", "gemini-pro-latest"),
                 ("ollama", "llama3.2:1b")
             ]
         },
@@ -76,7 +76,7 @@ class SmartRouter:
                 ("omniroute", "auto"),
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-3.8-flash"),
+                ("gemini", "gemini-pro-latest"),
                 ("cerebras", "llama3.1-70b"),
                 ("groq", "llama-3.3-70b-versatile"),
                 ("ollama", "llama3.2:1b")
@@ -88,7 +88,7 @@ class SmartRouter:
             "chain": [
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-3.5-flash-lite"),
+                ("gemini", "gemini-flash-latest"),
                 ("ollama", "llama3.2:1b")
             ]
         },
@@ -100,7 +100,7 @@ class SmartRouter:
                 ("omniroute", "auto"),
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-3.5-flash-lite"),
+                ("gemini", "gemini-flash-latest"),
                 ("cerebras", "llama3.1-70b"),
                 ("groq", "llama-3.3-70b-versatile"),
                 ("ollama", "llama3.2:1b")
@@ -112,7 +112,7 @@ class SmartRouter:
             "chain": [
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-3.5-flash-lite"),
+                ("gemini", "gemini-flash-latest"),
                 ("ollama", "llama3.2:1b")
             ]
         }

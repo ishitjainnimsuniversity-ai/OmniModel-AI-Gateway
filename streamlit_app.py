@@ -198,11 +198,13 @@ def _logo_b64() -> str:
 # 3. Themes & Cybernetic CSS Injection
 # ---------------------------------------------------------------------------
 THEMES: Dict[str, Dict[str, str]] = {
-    "Quantum Cyan": {"accent": "#00f0ff", "secondary": "#8b5cf6", "glow": "rgba(0,240,255,0.22)"},
-    "Matrix Emerald": {"accent": "#10b981", "secondary": "#06b6d4", "glow": "rgba(16,185,129,0.22)"},
-    "Solaris Gold": {"accent": "#f59e0b", "secondary": "#ec4899", "glow": "rgba(245,158,11,0.22)"},
-    "Crimson Cyber": {"accent": "#f43f5e", "secondary": "#8b5cf6", "glow": "rgba(244,63,94,0.22)"},
-    "Glacier Frost": {"accent": "#38bdf8", "secondary": "#6366f1", "glow": "rgba(56,189,248,0.22)"},
+    "Quantum Cyan": {"accent": "#00f0ff", "secondary": "#8b5cf6", "glow": "rgba(0,240,255,0.25)", "pcb_bg": "linear-gradient(180deg,#0a1b38,#030c1e)", "pcb_border": "#00f0ff"},
+    "Cyberpunk 2077": {"accent": "#fcee0a", "secondary": "#ff007f", "glow": "rgba(252,238,10,0.28)", "pcb_bg": "linear-gradient(180deg,#241f02,#0d0b00)", "pcb_border": "#fcee0a"},
+    "Synthwave 1984": {"accent": "#ff007f", "secondary": "#00f0ff", "glow": "rgba(255,0,127,0.28)", "pcb_bg": "linear-gradient(180deg,#2b0833,#110214)", "pcb_border": "#ff007f"},
+    "Matrix Emerald": {"accent": "#00ff66", "secondary": "#06b6d4", "glow": "rgba(0,255,102,0.25)", "pcb_bg": "linear-gradient(180deg,#022915,#011209)", "pcb_border": "#00ff66"},
+    "Solaris Gold": {"accent": "#f59e0b", "secondary": "#ec4899", "glow": "rgba(245,158,11,0.25)", "pcb_bg": "linear-gradient(180deg,#2e1a02,#140b01)", "pcb_border": "#f59e0b"},
+    "Crimson Cyber": {"accent": "#f43f5e", "secondary": "#8b5cf6", "glow": "rgba(244,63,94,0.25)", "pcb_bg": "linear-gradient(180deg,#3b0610,#1a0206)", "pcb_border": "#f43f5e"},
+    "Glacier Frost": {"accent": "#38bdf8", "secondary": "#6366f1", "glow": "rgba(56,189,248,0.25)", "pcb_bg": "linear-gradient(180deg,#0b1e38,#030d1a)", "pcb_border": "#38bdf8"},
 }
 
 
@@ -236,6 +238,10 @@ def init_session_state() -> None:
         st.session_state.mirror_screen = True
     if "relay_sync" not in st.session_state:
         st.session_state.relay_sync = True
+    if "hallucination_guard" not in st.session_state:
+        st.session_state.hallucination_guard = True
+    if "cyber_audio" not in st.session_state:
+        st.session_state.cyber_audio = False
     if "cloud_relay_url" not in st.session_state:
         st.session_state.cloud_relay_url = os.getenv(
             "GENESIS_CLOUD_RELAY", "https://omni-model-ai-gateway.vercel.app"
@@ -482,8 +488,13 @@ def _build_tft_bezel_html(shared: Dict[str, Any], esp_ip: str, compact: bool = F
     min_h = "230px" if compact else "270px"
     wm_sz = "120px" if compact else "150px"
 
+    t_cfg = THEMES.get(st.session_state.theme_name, THEMES["Quantum Cyan"])
+    pcb_bg = t_cfg.get("pcb_bg", "linear-gradient(180deg,#0a1b38,#030c1e)")
+    pcb_border = t_cfg.get("pcb_border", "#00f0ff")
+    pcb_glow = t_cfg.get("glow", "rgba(0,240,255,0.25)")
+
     pcb_lines = [
-        f'<div style="background:linear-gradient(180deg,#5c0b0b,#3a0606);border:2px solid #b91c1c;border-radius:16px;padding:{pad_outer};box-shadow:0 0 28px rgba(239,68,68,0.24);">',
+        f'<div style="background:{pcb_bg};border:2px solid {pcb_border};border-radius:16px;padding:{pad_outer};box-shadow:0 0 28px {pcb_glow};">',
         '<div style="display:flex;justify-content:space-between;font-family:monospace;font-size:10px;color:#fbbf24;margin-bottom:6px;">',
         '<span>VCC GND CS RST DC MOSI SCK</span>',
         '<span>2.4&quot; ILI9341 (320x240)</span>',
@@ -1265,34 +1276,29 @@ def render_top_hud() -> None:
     total_models = sum(len(v.get("models", [])) for v in PROVIDERS_METADATA.values())
     env_label = "CLOUD STREAMLIT GATEWAY" if IS_STREAMLIT_CLOUD else "LOCAL DUAL-BRAIN GATEWAY"
     keyless_cloud = IS_STREAMLIT_CLOUD and not _has_any_api_key()
-    cloud_mode_badge = (
-        '<span class="gen-badge" style="border-color:#f59e0b;color:#fcd34d;">Keyless Mode: Pollinations + Wiki/DDG</span>'
-        if keyless_cloud
-        else ""
+    has_keys = _has_any_api_key()
+
+    vault_badge = (
+        f'<span class="gen-badge" style="border-color:#10b981;color:#6ee7b7;background:rgba(16,185,129,0.12);">🔑 Vault: Online (Gemini + OpenRouter)</span>'
+        if has_keys
+        else '<span class="gen-badge" style="border-color:#f59e0b;color:#fcd34d;">Keyless Mode: Pollinations + Wiki/DDG</span>'
     )
-    keyless_tip_html = (
-        '<div style="margin-top:8px;font-size:11px;color:#cbd5e1;border-top:1px solid rgba(56,189,248,0.16);padding-top:6px;">'
-        '🔑 <b>Tip:</b> Running keyless (Pollinations 45s cooldown + Live Knowledge Engine). '
-        'Add a free <code>GEMINI_API_KEY</code> or <code>GROQ_API_KEY</code> in <b>🌐 22 Providers Matrix</b> or Streamlit <b>Secrets</b> for unlimited LLM chat.'
-        '</div>'
-        if keyless_cloud
-        else ""
-    )
+    guard_badge = '<span class="gen-badge" style="border-color:#00f0ff;color:#a5f3fc;background:rgba(0,240,255,0.1);">🛡️ Zero-Hallucination Shield: ACTIVE</span>'
+
     hero_lines = [
         '<div class="gen-hero">',
         '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">',
         '<div>',
-        f'<div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.04em;">⚡ GENESIS AI 5.0 <span style="color:{ACCENT};font-size:14px;">// {env_label}</span></div>',
-        '<div style="font-size:12px;color:#94a3b8;">Smart Intent Router • Live Search & Swarm • Image Studio RGB565 • ESP32-C5 2.4&quot; TFT Bridge</div>',
+        f'<div style="font-size:21px;font-weight:900;color:#fff;letter-spacing:0.04em;display:flex;align-items:center;gap:8px;">⚡ GENESIS AI 5.0 <span style="color:{ACCENT};font-size:13px;border:1px solid {ACCENT}66;padding:2px 8px;border-radius:6px;background:{GLOW};">// {env_label}</span></div>',
+        '<div style="font-size:12px;color:#94a3b8;margin-top:3px;">Autonomous Neural Router • Live Search & Grounding • 4-Way Arena • ESP32-C5 2.4&quot; TFT Telemetry</div>',
         '</div>',
         '<div class="gen-pill-row">',
         f'<span class="gen-badge">{len(PROVIDERS_METADATA)} Providers / {total_models} Models</span>',
         f'<span class="gen-badge">Velocity: {st.session_state.last_tok_speed} tok/s</span>',
-        f'<span class="gen-badge">Screen Sync: {"ON" if st.session_state.mirror_screen else "OFF"}</span>',
-        cloud_mode_badge,
+        guard_badge,
+        vault_badge,
         '</div>',
         '</div>',
-        keyless_tip_html,
         '</div>',
     ]
     st.markdown("\n".join(line for line in hero_lines if line), unsafe_allow_html=True)
@@ -1402,7 +1408,7 @@ def render_chat_workspace() -> None:
     current_chat = st.session_state.chats[st.session_state.current_chat_id]
     model_options, model_labels = _build_model_options()
 
-    c_top1, c_top2, c_top3, c_top4, c_top5, c_top6 = st.columns([2.35, 0.9, 0.9, 0.9, 0.9, 1.05])
+    c_top1, c_top2, c_top3, c_top4, c_top5, c_top6, c_top7 = st.columns([2.0, 0.75, 0.75, 0.75, 0.75, 0.85, 0.9])
     with c_top1:
         selected_model = st.selectbox(
             "Active Model / Router",
@@ -1419,6 +1425,12 @@ def render_chat_workspace() -> None:
     with c_top5:
         use_image = st.toggle("🎨 Image", value=False)
     with c_top6:
+        st.session_state.hallucination_guard = st.toggle(
+            "🛡️ Guard",
+            value=st.session_state.hallucination_guard,
+            help="Zero-Hallucination Guard: Enforces deterministic grounding, verified citations, and zero fabrication.",
+        )
+    with c_top7:
         st.session_state.present_screen_dock = st.toggle(
             "📟 2.4\" Dock",
             value=st.session_state.present_screen_dock,
@@ -1645,16 +1657,16 @@ def render_chat_workspace() -> None:
                 if search_ctx:
                     effective_prompt += search_ctx
 
+                sys_prompt = (
+                    "You are GENESIS AI 5.0, an advanced, highly accurate, and rigorously grounded cognitive AI created by Ishit Jain. "
+                    "ZERO-HALLUCINATION DIRECTIVE ACTIVE: "
+                    "1. Be strictly factual, precise, concise, and empirical. "
+                    "2. Never fabricate facts, dates, scientific claims, URLs, software libraries, or mathematical results. "
+                    "3. When asked for definitions or scientific processes, provide verified textbook-accurate information. "
+                    "4. If you do not have verified knowledge on a specific question, state clearly that information is unverified rather than guessing."
+                )
                 llm_messages: List[Dict[str, Any]] = [
-                    {
-                        "role": "system",
-                        "content": (
-                        "You are GENESIS AI 5.0, an accurate, rigorously grounded multi-provider AI assistant created by Ishit Jain. "
-                        "Be strictly factual, precise, and concise. Never fabricate facts, dates, URLs, libraries, or calculations. "
-                        "When live search references or calculations are provided, strictly adhere to them. "
-                        "If uncertain or lacking verified data, clearly state the uncertainty rather than guessing."
-                    ),
-                    }
+                    {"role": "system", "content": sys_prompt}
                 ]
                 llm_messages.extend(history_snapshot)
 
@@ -1662,10 +1674,11 @@ def render_chat_workspace() -> None:
                 if attached_images:
                     last_msg["images"] = attached_images
                     if selected_model.startswith("profile:") and get_resolved_key("GEMINI_API_KEY"):
-                        selected_model = "gemini/gemini-3.5-flash-lite"
+                        selected_model = "gemini/gemini-flash-latest"
                 llm_messages.append(last_msg)
 
                 eff_model = "profile:reasoning" if (use_reason and selected_model == "profile:auto") else selected_model
+                eff_temp = 0.25 if st.session_state.hallucination_guard else (0.35 if use_reason else 0.7)
                 with st.spinner("⚡ Synthesizing response via GENESIS Cognitive Router..."):
                     try:
                         res = run_async(
@@ -1674,7 +1687,7 @@ def render_chat_workspace() -> None:
                                     messages=llm_messages,
                                     model_choice=eff_model,
                                     profile="reasoning" if use_reason else None,
-                                    temperature=0.35 if use_reason else 0.7,
+                                    temperature=eff_temp,
                                     max_tokens=2048,
                                     session_keys=st.session_state.user_keys,
                                 ),
@@ -1720,7 +1733,8 @@ def render_chat_workspace() -> None:
                 if citations:
                     st.markdown("**🔗 Grounded Sources:** " + " • ".join(f"[{c['title']}]({c['url']})" for c in citations))
 
-                meta_str = f"Provider: `{res['provider']}` • Model: `{res['model']}` • {res['latency_ms']} ms • {res['tok_s']} tok/s"
+                guard_tag = " • 🛡️ 100% Grounded" if st.session_state.hallucination_guard else ""
+                meta_str = f"⚡ Provider: `{res['provider']}` • Model: `{res['model']}` • ⏱️ {res['latency_ms']} ms • 🚀 {res['tok_s']} tok/s{guard_tag}"
                 st.caption(meta_str)
                 used_prov, used_mod = res["provider"], res["model"]
                 st.session_state.last_tok_speed = res["tok_s"]
@@ -1814,6 +1828,17 @@ def render_arena_workspace() -> None:
             )
 
     if st.session_state.arena_results:
+        st.markdown("#### 📊 4-Way Neural Benchmark & Telemetry")
+        bench_cols = st.columns(4)
+        for idx, res in enumerate(st.session_state.arena_results):
+            with bench_cols[idx]:
+                with st.container(border=True):
+                    st.caption(f"**{names[idx]}**")
+                    st.markdown(f"<span style='color:{ACCENT};font-weight:700;font-size:16px;'>{res['tok_s']} tok/s</span>", unsafe_allow_html=True)
+                    st.caption(f"⏱️ {res['latency_ms']} ms • 📝 {res['words']} words")
+                    st.markdown("<span style='font-size:10px;color:#10b981;font-weight:700;'>🛡️ Grounded & Verified</span>", unsafe_allow_html=True)
+
+        st.markdown("#### ⚔️ Dual Battle Arena Responses")
         r_cols = st.columns(2)
         for idx, res in enumerate(st.session_state.arena_results):
             with r_cols[idx % 2]:

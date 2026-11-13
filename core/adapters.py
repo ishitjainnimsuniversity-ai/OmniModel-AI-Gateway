@@ -127,7 +127,7 @@ class UniversalAdapter:
                 provider_id = "gemini"
                 meta = PROVIDERS_METADATA["gemini"]
                 api_key = gem_key
-                model = "gemini-3.5-flash-lite"
+                model = "gemini-flash-latest"
             else:
                 yield {
                     "delta": f"Missing API key for {meta.get('name', provider_id)}",
