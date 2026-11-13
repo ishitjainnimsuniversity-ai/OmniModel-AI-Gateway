@@ -1719,15 +1719,48 @@ def main():
     print(f"📡 OpenAI Proxy endpoint ready at http://{host}:{port}/v1/chat/completions")
     print(f"🌐 Web Dashboard & Multi-Model Arena ready at http://{host}:{port}/")
     print("==================================================================")
-    # Start secondary listener on port 8100 so ESP32 hardcoded to 8100 connects seamlessly
+    # Start lightweight TCP proxy on port 8100 -> 8000 so ESP32 hardcoded to 8100 connects seamlessly
     if not _is_cloud_env():
+        import socket
         import threading
-        def _run_secondary():
+
+        def _forward(src, dst):
             try:
-                uvicorn.run(app, host=host, port=8100, log_level="warning")
+                while True:
+                    data = src.recv(4096)
+                    if not data:
+                        break
+                    dst.sendall(data)
             except Exception:
                 pass
-        threading.Thread(target=_run_secondary, daemon=True).start()
+            finally:
+                try: src.close()
+                except Exception: pass
+                try: dst.close()
+                except Exception: pass
+
+        def _listen_8100():
+            srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                srv.bind(("0.0.0.0", 8100))
+                srv.listen(64)
+                while True:
+                    client_sock, _ = srv.accept()
+                    try:
+                        target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        target_sock.connect(("127.0.0.1", port))
+                        t1 = threading.Thread(target=_forward, args=(client_sock, target_sock), daemon=True)
+                        t2 = threading.Thread(target=_forward, args=(target_sock, client_sock), daemon=True)
+                        t1.start()
+                        t2.start()
+                    except Exception:
+                        try: client_sock.close()
+                        except Exception: pass
+            except Exception:
+                pass
+
+        threading.Thread(target=_listen_8100, daemon=True).start()
 
     uvicorn.run(app, host=host, port=port, reload=False)
 
