@@ -24,12 +24,8 @@ class UniversalAdapter:
 
         if provider_id == "gemini":
             # Map requested Gemini model to live Google AI Studio endpoints
-            if not model or any(k in model for k in ("flash", "lite", "fast", "3.5", "2.0", "2.5", "default")):
-                model = "gemini-flash-latest"
-            elif any(k in model for k in ("pro", "reason", "3.8")):
-                model = "gemini-pro-latest"
-            else:
-                model = "gemini-flash-latest"
+            if not model or "latest" in model or "2.5" in model or "1.5" in model:
+                model = "gemini-3.5-flash"
             target_url = f"{base_url}/models/{model}:generateContent?key={api_key or ''}"
             return target_url, headers, format_type
 

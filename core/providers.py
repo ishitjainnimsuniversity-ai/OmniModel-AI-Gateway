@@ -12,7 +12,7 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "category": "Frontier Multimodal & Reasoning",
         "env_var": "GEMINI_API_KEY",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
-        "default_model": "gemini-flash-latest",
+        "default_model": "gemini-3.5-flash",
         "free_tier_available": True,
         "free_tier_note": "Generous free RPM on Google AI Studio without credit card",
         "free_key_url": "https://aistudio.google.com/app/apikey",
@@ -20,9 +20,9 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
         "catalog_url": "https://ai.google.dev/gemini-api/docs/models",
         "format_type": "gemini",
         "models": [
-            {"id": "gemini-flash-latest", "name": "Gemini Flash Latest (Recommended)", "context": "1M", "speed": "Ultra Fast (<500ms)", "free": True, "tags": ["fast", "free_tier", "multimodal"]},
-            {"id": "gemini-pro-latest", "name": "Gemini Pro Latest (Deep Reasoning)", "context": "2M", "speed": "Frontier Quality", "free": True, "tags": ["frontier", "reasoning", "free_tier"]},
-            {"id": "gemini-flash-lite-latest", "name": "Gemini Flash Lite (Ultra Low Latency)", "context": "1M", "speed": "Instant (<200ms)", "free": True, "tags": ["fast", "free_tier"]}
+            {"id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash (Ultra Fast & Stable)", "context": "1M", "speed": "Ultra Fast (<400ms)", "free": True, "tags": ["fast", "free_tier", "multimodal", "recommended"]},
+            {"id": "gemini-3.5-flash-lite", "name": "Gemini 3.5 Flash Lite (Instant)", "context": "1M", "speed": "Instant (<150ms)", "free": True, "tags": ["fast", "free_tier"]},
+            {"id": "gemini-3.8-flash", "name": "Gemini 3.8 Flash (Frontier)", "context": "1M", "speed": "High Quality", "free": True, "tags": ["frontier", "reasoning", "free_tier"]}
         ]
     },
     "groq": {

@@ -49,12 +49,13 @@ class SmartRouter:
         },
         "speed": {
             "name": "⚡ Ultra-Fast Speed (<150ms)",
-            "description": "Blazing fast inference via OpenRouter Free, Pollinations & Gemini",
+            "description": "Blazing fast inference via Gemini 3.5 Flash, OpenRouter Free & Pollinations",
             "chain": [
+                ("gemini", "gemini-3.5-flash-lite"),
+                ("gemini", "gemini-3.5-flash"),
                 ("openrouter", "openrouter/free"),
-                ("pollinations", "openai"),
-                ("gemini", "gemini-flash-latest"),
                 ("groq", "llama-3.3-70b-versatile"),
+                ("pollinations", "openai"),
                 ("ollama", "llama3.2:1b")
             ]
         },
@@ -62,9 +63,10 @@ class SmartRouter:
             "name": "🧠 Deep Reasoning & Math",
             "description": "Complex chain-of-thought, mathematical proof, logic and deep planning",
             "chain": [
+                ("gemini", "gemini-3.5-flash"),
+                ("gemini", "gemini-3.8-flash"),
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-pro-latest"),
                 ("ollama", "llama3.2:1b")
             ]
         },
@@ -72,8 +74,9 @@ class SmartRouter:
             "name": "💻 Elite Software Architecture & Code",
             "description": "Complex full-stack coding with Claude Code, Cursor, FreeLLMAPI, OmniRoute & Gemini",
             "chain": [
+                ("gemini", "gemini-3.5-flash"),
+                ("gemini", "gemini-3.5-flash-lite"),
                 ("openrouter", "openrouter/free"),
-                ("gemini", "gemini-3.8-flash"),
                 ("freellmapi", "auto"),
                 ("omniroute", "auto"),
                 ("cerebras", "llama3.1-70b"),
@@ -86,23 +89,24 @@ class SmartRouter:
             "name": "🌐 Live Web Search & Grounding",
             "description": "Real-time web retrieval, current news, fact checking and source citations",
             "chain": [
+                ("gemini", "gemini-3.5-flash"),
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-flash-latest"),
                 ("ollama", "llama3.2:1b")
             ]
         },
         "free_tier": {
             "name": "🆓 100% Zero-Cost / Free Tier (~11.7B Pool)",
-            "description": "Auto-routes to verified 100% free models (FreeLLMAPI, OmniRoute, OpenRouter Free, Pollinations, Gemini)",
+            "description": "Auto-routes to verified 100% free models (Gemini, OpenRouter Free, FreeLLMAPI, OmniRoute, Pollinations)",
             "chain": [
+                ("gemini", "gemini-3.5-flash"),
+                ("gemini", "gemini-3.5-flash-lite"),
+                ("openrouter", "openrouter/free"),
                 ("freellmapi", "auto"),
                 ("omniroute", "auto"),
-                ("openrouter", "openrouter/free"),
-                ("pollinations", "openai"),
-                ("gemini", "gemini-flash-latest"),
                 ("cerebras", "llama3.1-70b"),
                 ("groq", "llama-3.3-70b-versatile"),
+                ("pollinations", "openai"),
                 ("ollama", "llama3.2:1b")
             ]
         },
@@ -110,9 +114,10 @@ class SmartRouter:
             "name": "⚖️ Balanced Frontier Intelligence",
             "description": "Optimal balance of quality, speed and conversational fluency",
             "chain": [
+                ("gemini", "gemini-3.5-flash"),
+                ("gemini", "gemini-3.5-flash-lite"),
                 ("openrouter", "openrouter/free"),
                 ("pollinations", "openai"),
-                ("gemini", "gemini-flash-latest"),
                 ("ollama", "llama3.2:1b")
             ]
         }
@@ -660,7 +665,7 @@ class SmartRouter:
             gem_key = get_vault_key("GEMINI_API_KEY")
             if gem_key:
                 r_gem = httpx.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gem_key}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={gem_key}",
                     json={
                         "contents": [{"parts": [{"text": prompt}]}],
                         "systemInstruction": {"parts": [{"text": "You are GENESIS AI 5.0, created by Ishit Jain. Be strictly factual, direct, and concise."}]}
@@ -674,7 +679,7 @@ class SmartRouter:
                         parts = cands[0].get("content", {}).get("parts", [])
                         text = "".join(p.get("text", "") for p in parts).strip()
                         if text:
-                            return text, "gemini", "gemini-3.8-flash"
+                            return text, "gemini", "gemini-3.5-flash"
         except Exception:
             pass
 
