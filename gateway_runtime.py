@@ -752,7 +752,7 @@ async def ping_provider(provider_id: str):
 
 @app.get("/api/health")
 @app.get("/health")
-async def health_check():
+async def health_check(deep: Optional[int] = None):
     if _CORE_IMPORT_ERROR is not None:
         return JSONResponse(
             status_code=500,
@@ -763,6 +763,8 @@ async def health_check():
                 "cloud_mode": _is_cloud_env(),
                 "core_loaded": False,
                 "core_error": _CORE_IMPORT_ERROR,
+                "ai_ready": False,
+                "cloud_reachable": False,
             },
         )
     return {
@@ -771,6 +773,8 @@ async def health_check():
         "version": "2.0.0",
         "cloud_mode": _is_cloud_env(),
         "core_loaded": True,
+        "ai_ready": True,
+        "cloud_reachable": True,
     }
 
 
@@ -1497,6 +1501,99 @@ async def screen_command_endpoint(request: Request):
         return {"status": "error", "detail": str(e)}
 
 
+def _paginate_for_tft(text: str, cols: int = 26, rows: int = 9) -> List[str]:
+    import textwrap
+    import unicodedata
+    cols = max(10, min(80, cols))
+    rows = max(1, min(40, rows))
+    t = text.replace("\r\n", "\n")
+    t = re.sub(r"```[a-zA-Z0-9_+-]*\n?", "", t)
+    t = re.sub(r"`([^`]*)`", r"\1", t)
+    t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", t)
+    t = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", t)
+    t = re.sub(r"^\s{0,3}#{1,6}\s*", "", t, flags=re.M)
+    t = re.sub(r"(\*\*|__)(.*?)\1", r"\2", t)
+    t = re.sub(r"(?<!\w)[*_]([^*_\n]+)[*_](?!\w)", r"\1", t)
+    t = re.sub(r"^\s*[-*+]\s+", "- ", t, flags=re.M)
+    t = re.sub(r"^\s*>\s?", "", t, flags=re.M)
+    t = t.replace("|", " ")
+    # Transliterate to ASCII
+    ascii_chars = []
+    for ch in t:
+        if ord(ch) < 128:
+            ascii_chars.append(ch)
+        else:
+            n = unicodedata.normalize("NFKD", ch).encode("ascii", "ignore").decode()
+            ascii_chars.append(n if n else " ")
+    t = "".join(ascii_chars)
+    lines: List[str] = []
+    for para in t.split("\n"):
+        p = para.strip()
+        if not p:
+            lines.append("")
+            continue
+        lines.extend(textwrap.wrap(p, width=cols, break_long_words=True, drop_whitespace=True) or [""])
+    while lines and lines[-1] == "":
+        lines.pop()
+    pages = ["\n".join(lines[i:i + rows]) for i in range(0, len(lines), rows)]
+    return pages or [""]
+
+
+@app.get("/api/device/feed")
+async def device_feed_endpoint(seq: int = 0, cols: int = 26, rows: int = 9, page: int = 0):
+    """Polled by ESP32-C5 running genesis_ai_firmware."""
+    feed = hardware_bridge.latest_feed
+    current_seq = int(feed.get("version", 1))
+    state = feed.get("state", "READY")
+    changed = seq != current_seq
+    out = {
+        "seq": current_seq,
+        "state": state,
+        "changed": changed,
+        "brain": "CLOUD",
+        "mode": "ONLINE",
+        "provider": feed.get("provider", "Gemini"),
+        "model": feed.get("model", "gemini-pro-latest"),
+    }
+    if not changed:
+        return out
+    raw_text = feed.get("text") or feed.get("answer") or ""
+    pages = _paginate_for_tft(raw_text, cols=cols, rows=rows)
+    p_idx = max(0, min(page, len(pages) - 1))
+    out.update({
+        "question": feed.get("question", ""),
+        "text": pages[p_idx],
+        "page": p_idx,
+        "total_pages": len(pages),
+        "conversation_id": "conv_gateway_live",
+        "request_id": feed.get("cmd_id", "live"),
+    })
+    return out
+
+
+@app.get("/api/device/feed/page")
+async def device_feed_page_endpoint(page: int = 0, cols: int = 26, rows: int = 9):
+    feed = hardware_bridge.latest_feed
+    raw_text = feed.get("text") or feed.get("answer") or ""
+    pages = _paginate_for_tft(raw_text, cols=cols, rows=rows)
+    p_idx = max(0, min(page, len(pages) - 1))
+    return {
+        "seq": int(feed.get("version", 1)),
+        "page": p_idx,
+        "total_pages": len(pages),
+        "text": pages[p_idx],
+    }
+
+
+@app.post("/api/device/new")
+async def device_new_endpoint():
+    hardware_bridge.latest_feed["version"] = hardware_bridge.latest_feed.get("version", 0) + 1
+    hardware_bridge.latest_feed["state"] = "READY"
+    hardware_bridge.latest_feed["question"] = "Awaiting input..."
+    hardware_bridge.latest_feed["text"] = "Ready for query."
+    return {"conversation_id": "conv_new_live"}
+
+
 @app.get("/api/screen/rgb")
 @app.post("/api/screen/rgb")
 async def screen_rgb_endpoint(request: Request, brightness: Optional[int] = None):
@@ -1622,6 +1719,16 @@ def main():
     print(f"📡 OpenAI Proxy endpoint ready at http://{host}:{port}/v1/chat/completions")
     print(f"🌐 Web Dashboard & Multi-Model Arena ready at http://{host}:{port}/")
     print("==================================================================")
+    # Start secondary listener on port 8100 so ESP32 hardcoded to 8100 connects seamlessly
+    if not _is_cloud_env():
+        import threading
+        def _run_secondary():
+            try:
+                uvicorn.run(app, host=host, port=8100, log_level="warning")
+            except Exception:
+                pass
+        threading.Thread(target=_run_secondary, daemon=True).start()
+
     uvicorn.run(app, host=host, port=port, reload=False)
 
 

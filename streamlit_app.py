@@ -728,17 +728,24 @@ def flush_browser_js_bridge() -> None:
             body: JSON.stringify({{style: cmd.style, aspect: cmd.aspect}})
           }});
         }} else {{
-          await fetch(base + '/api/feed', {{
-            method: 'POST',
-            headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{
-              state: cmd.state || 'ANSWERED',
-              question: cmd.question || '',
-              provider: cmd.provider || 'Gemini',
-              model: cmd.model || 'GENESIS AI',
-              text: cmd.text || ''
-            }})
-          }});
+          try {{
+            await fetch(base + '/api/feed', {{
+              method: 'POST',
+              headers: {{'Content-Type': 'application/json'}},
+              body: JSON.stringify({{
+                state: cmd.state || 'ANSWERED',
+                question: cmd.question || '',
+                provider: cmd.provider || 'Gemini',
+                model: cmd.model || 'GENESIS AI',
+                text: cmd.text || ''
+              }})
+            }});
+          }} catch (eFeed) {{}}
+          try {{
+            const qEnc = encodeURIComponent(cmd.question || '');
+            const aEnc = encodeURIComponent(cmd.text || '');
+            await fetch(base + '/push_answer?q=' + qEnc + '&a=' + aEnc + '&src=gateway');
+          }} catch (ePush) {{}}
         }}
       }} catch (e) {{}}
     }}
