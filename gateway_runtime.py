@@ -593,8 +593,24 @@ async def anthropic_messages_endpoint(request: Request):
         if isinstance(c, list):
             text_parts = []
             for b in c:
-                if isinstance(b, dict) and b.get("type") == "text":
-                    text_parts.append(b.get("text", ""))
+                if isinstance(b, dict):
+                    b_type = b.get("type", "")
+                    if b_type == "text":
+                        text_parts.append(b.get("text", ""))
+                    elif b_type == "tool_use":
+                        tool_name = b.get("name", "tool")
+                        tool_input = b.get("input", {})
+                        text_parts.append(f"[Executed Tool: {tool_name}\nArguments: {json.dumps(tool_input)}]")
+                    elif b_type == "tool_result":
+                        res_content = b.get("content", "")
+                        if isinstance(res_content, list):
+                            cr_parts = [cr.get("text", "") if isinstance(cr, dict) else str(cr) for cr in res_content]
+                            res_text = "\n".join(cr_parts)
+                        else:
+                            res_text = str(res_content)
+                        text_parts.append(f"[Tool Result for {b.get('tool_use_id', 'call')}:\n{res_text}]")
+                    elif "text" in b:
+                        text_parts.append(str(b["text"]))
                 elif isinstance(b, str):
                     text_parts.append(b)
             c_text = "\n".join(text_parts)
@@ -606,11 +622,11 @@ async def anthropic_messages_endpoint(request: Request):
 
     # Determine profile or model
     profile = "coding"
-    if req_model in ("genesis-5.0-reasoning", "reasoning"):
-        profile = "reasoning"
+    if req_model in ("genesis-5.0-reasoning", "reasoning", "claude-3-opus-20240229", "claude-3-7-sonnet-20250219"):
+        profile = "coding"
     elif req_model in ("genesis-5.0-free", "free_tier"):
         profile = "free_tier"
-    elif req_model in ("genesis-5.0-speed", "speed"):
+    elif req_model in ("genesis-5.0-speed", "speed", "claude-3-5-haiku-20241022"):
         profile = "speed"
 
     if stream:

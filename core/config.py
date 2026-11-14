@@ -38,18 +38,23 @@ class GatewayConfig:
     @classmethod
     def get_key(cls, env_var: str) -> Optional[str]:
         cls.reload_env()
-        val = os.getenv(env_var)
-        if val and val.strip():
-            clean = val.strip().strip("'\"")
-            if len(clean) > 0:
-                return clean
-        try:
-            from core.vault import get_vault_key
-            v_val = get_vault_key(env_var)
-            if v_val and v_val.strip():
-                return v_val.strip()
-        except Exception:
-            pass
+        candidates = [env_var, env_var.upper()]
+        if not env_var.upper().endswith("_KEY") and not env_var.upper().endswith("_TOKEN"):
+            candidates.append(f"{env_var.upper()}_API_KEY")
+            
+        for cand in candidates:
+            val = os.getenv(cand)
+            if val and val.strip():
+                clean = val.strip().strip("'\"")
+                if len(clean) > 0:
+                    return clean
+            try:
+                from core.vault import get_vault_key
+                v_val = get_vault_key(cand)
+                if v_val and v_val.strip():
+                    return v_val.strip()
+            except Exception:
+                pass
         return None
 
     @classmethod
