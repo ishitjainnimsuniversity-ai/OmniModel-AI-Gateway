@@ -86,6 +86,17 @@ class HardwareScreenBridge:
             self.ser = None
             return False
         try:
+            if self.ser and self.ser.is_open:
+                return True
+            target_port = self.port
+            if hasattr(serial, "tools") and hasattr(serial.tools, "list_ports"):
+                for p in serial.tools.list_ports.comports():
+                    hwid = (p.hwid or "").lower()
+                    desc = (p.description or "").lower()
+                    if "303a" in hwid or "esp32" in desc or "usb serial" in desc:
+                        target_port = p.device
+                        break
+            self.port = target_port
             if self.ser:
                 try:
                     self.ser.close()
@@ -107,8 +118,14 @@ class HardwareScreenBridge:
 
     def _start_usb_reader(self):
         def reader_loop():
+            last_reconnect = 0.0
             while True:
                 try:
+                    if not (self.ser and self.ser.is_open):
+                        now = time.time()
+                        if now - last_reconnect > 2.0:
+                            last_reconnect = now
+                            self._connect_usb()
                     with self._lock:
                         if self.ser and self.ser.is_open:
                             waiting = self.ser.in_waiting
@@ -126,7 +143,12 @@ class HardwareScreenBridge:
                                                 self.esp_wifi_ip = new_ip
                                                 print(f"[ScreenBridge] Auto-discovered ESP32 IP from Serial: {new_ip}", flush=True)
                 except Exception:
-                    pass
+                    try:
+                        if self.ser:
+                            self.ser.close()
+                    except Exception:
+                        pass
+                    self.ser = None
                 time.sleep(0.05)
 
         t = threading.Thread(target=reader_loop, daemon=True)
@@ -367,6 +389,8 @@ class HardwareScreenBridge:
 
         # Channel 2: USB Serial Sync (if plugged into laptop)
         with self._lock:
+            if not (self.ser and self.ser.is_open):
+                self._connect_usb()
             if self.ser and self.ser.is_open:
                 try:
                     line = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
@@ -377,6 +401,7 @@ class HardwareScreenBridge:
                         self.ser.flush()
                         time.sleep(0.004)
                     success = True
+                    print(f"[ScreenBridge] Pushed update via USB ({self.port}): state={state}, q='{question[:30]}'", flush=True)
                 except Exception:
                     try:
                         self.ser.close()
