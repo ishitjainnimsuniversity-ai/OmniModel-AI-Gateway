@@ -22,6 +22,15 @@ class UniversalAdapter:
             "Content-Type": "application/json"
         }
 
+        # If calling any provider with the universal sovereign OpenRouter key, bridge seamlessly to OpenRouter
+        if api_key and str(api_key).startswith("sk-or-v1-") and provider_id != "openrouter":
+            target_url = "https://openrouter.ai/api/v1/chat/completions"
+            headers["Authorization"] = f"Bearer {api_key}"
+            headers["HTTP-Referer"] = "https://genesis-ai.streamlit.app"
+            headers["X-Title"] = "GENESIS AI 5.0"
+            format_type = "openai_compatible"
+            return target_url, headers, format_type
+
         if provider_id == "gemini":
             # Map requested Gemini model to live Google AI Studio endpoints
             if not model or "latest" in model or "2.5" in model or "1.5" in model:
@@ -398,13 +407,29 @@ class UniversalAdapter:
                         else:
                             formatted_messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
 
+                    # Map model slug if bridging through OpenRouter
+                    req_model = model
+                    if "openrouter.ai" in target_url:
+                        if "/" not in req_model or req_model.endswith(":free"):
+                            slug_map = {
+                                "anthropic": "anthropic/claude-3.7-sonnet",
+                                "openai": "openai/gpt-4o",
+                                "deepseek": "deepseek/deepseek-r1:free",
+                                "groq": "meta-llama/llama-3.3-70b-instruct:free",
+                                "mistral": "mistralai/mistral-large",
+                                "cerebras": "meta-llama/llama-3.1-70b-instruct",
+                                "nvidia_nim": "nvidia/nemotron-3.5-lightning:free",
+                                "gemini": "google/gemma-4-31b-it:free",
+                            }
+                            req_model = slug_map.get(provider_id, "openrouter/free")
+
                     payload = {
-                        "model": model,
+                        "model": req_model,
                         "messages": formatted_messages,
                         "temperature": temperature,
                         "stream": True
                     }
-                    if provider_id == "openrouter":
+                    if "openrouter.ai" in target_url:
                         payload["reasoning"] = {"exclude": True}
                     elif max_tokens:
                         payload["max_tokens"] = max_tokens

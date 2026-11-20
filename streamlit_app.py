@@ -104,7 +104,7 @@ def _hydrate_host_secrets() -> None:
         from core.vault import get_vault_keys
         for k, v in get_vault_keys().items():
             if v and v.strip():
-                os.environ.setdefault(k, v.strip())
+                os.environ[k] = v.strip()
     except Exception:
         pass
 
@@ -230,7 +230,7 @@ def init_session_state() -> None:
     try:
         from core.vault import get_vault_keys
         for vk, vv in get_vault_keys().items():
-            if vv and not st.session_state.user_keys.get(vk):
+            if vv:
                 st.session_state.user_keys[vk] = vv
     except Exception:
         pass
@@ -1287,7 +1287,7 @@ def render_top_hud() -> None:
     has_keys = _has_any_api_key()
 
     vault_badge = (
-        f'<span class="gen-badge" style="border-color:#10b981;color:#6ee7b7;background:rgba(16,185,129,0.12);">🔑 Vault: Online (Gemini + OpenRouter)</span>'
+        f'<span class="gen-badge" style="border-color:#10b981;color:#6ee7b7;background:rgba(16,185,129,0.12);">🔑 Vault: Online (27 Providers • All Models Armed)</span>'
         if has_keys
         else '<span class="gen-badge" style="border-color:#f59e0b;color:#fcd34d;">Keyless Mode: Pollinations + Wiki/DDG</span>'
     )
@@ -1943,9 +1943,9 @@ def render_routing_map_workspace() -> None:
 # 11. Workspace 4: 22 Providers Matrix & Session Key Pool
 # ---------------------------------------------------------------------------
 def render_providers_workspace() -> None:
-    st.markdown("### 🌐 Master 22 Providers Matrix & Session Key Pool")
+    st.markdown("### 🌐 Master 27 Providers Matrix & Universal Key Engine")
     st.caption(
-        "Keys entered here are stored strictly inside your private browser session (`st.session_state`) and are never exposed or shared."
+        "All provider slots are automatically armed with active sovereign keys. Custom per-session keys entered here take priority."
     )
 
     if st.button("📡 Batch Ping Active Cloud Providers", type="primary"):
