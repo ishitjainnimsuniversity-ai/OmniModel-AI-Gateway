@@ -496,6 +496,25 @@ PROVIDERS_METADATA: Dict[str, Dict[str, Any]] = {
             {"id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "name": "Cloudflare / Llama 3.3 70B Fast", "context": "128k", "speed": "Edge Ultra-Fast", "free": True, "tags": ["edge", "free_tier"]},
             {"id": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", "name": "Cloudflare / DeepSeek R1 32B", "context": "64k", "speed": "Reasoning", "free": True, "tags": ["reasoning", "free_tier"]}
         ]
+    },
+    "stratakernel": {
+        "id": "stratakernel",
+        "name": "StrataKernel OS // OpenTPU",
+        "category": "Hardware-Accelerated TPU Coprocessor (Google AI Studio)",
+        "env_var": None,
+        "base_url": "local://stratakernel",
+        "default_model": "opentpu-v1",
+        "free_tier_available": True,
+        "free_tier_note": "Integrated with Google AI Studio & OpenTPU PyRTL Coprocessor",
+        "free_key_url": "https://aistudio.google.com/apps/8df6ac3f-c730-4df5-a8c7-50d5e703d7d9",
+        "doc_url": "https://aistudio.google.com/apps/8df6ac3f-c730-4df5-a8c7-50d5e703d7d9",
+        "catalog_url": "https://github.com/UCSBarchlab/OpenTPU",
+        "format_type": "stratakernel",
+        "models": [
+            {"id": "opentpu-v1", "name": "StrataKernel OS 1.0 (OpenTPU Systolic Array)", "context": "64k", "speed": "Hardware-Fast", "free": True, "tags": ["coprocessor", "tpu", "hardware"]},
+            {"id": "strata-gemm", "name": "StrataKernel / Matrix Multiply & Hardware Verifier", "context": "32k", "speed": "Cycle-Accurate", "free": True, "tags": ["matrix", "systolic", "gemm"]},
+            {"id": "strata-quant", "name": "StrataKernel / INT8 Tensor Quantization & Staging", "context": "32k", "speed": "INT8 Verified", "free": True, "tags": ["quantization", "int8"]}
+        ]
     }
 }
 

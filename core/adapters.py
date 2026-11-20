@@ -107,6 +107,18 @@ class UniversalAdapter:
             or (GatewayConfig.get_key(env_var) if env_var else None)
         )
 
+        if provider_id == "stratakernel":
+            from core.stratakernel_bridge import stratakernel_chat_stream
+            async for ev in stratakernel_chat_stream(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens or 2048,
+                session_keys=session_keys,
+            ):
+                yield ev
+            return
+
         if provider_id == "openrouter" and (not model or model.endswith(":free")):
             model = "openrouter/free"
 

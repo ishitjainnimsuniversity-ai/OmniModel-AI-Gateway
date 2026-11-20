@@ -47,6 +47,15 @@ class SmartRouter:
                 ("ollama", "llama3.2:1b")
             ]
         },
+        "stratakernel": {
+            "name": "⚛️ StrataKernel OS // OpenTPU Coprocessor",
+            "description": "Hardware-accelerated TPU systolic execution & Stratum 0-5 zero-hallucination verification",
+            "chain": [
+                ("stratakernel", "opentpu-v1"),
+                ("openrouter", "openrouter/free"),
+                ("gemini", "gemini-3.5-flash")
+            ]
+        },
         "speed": {
             "name": "⚡ Ultra-Fast Speed (<150ms)",
             "description": "Blazing fast inference via Gemini 3.5 Flash, OpenRouter Free & Pollinations",
